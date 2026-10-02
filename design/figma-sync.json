@@ -958,7 +958,9 @@
       "locked": "103:10444",
       "pagination": "103:10562",
       "restore": "103:10674",
-      "signin": "103:10789"
+      "signin": "103:10789",
+      "vercelSignin": "118:10099",
+      "vercelAuthPending": "118:10110"
     },
     "sidebarId": "89:9074",
     "fieldComponents": [
@@ -967,7 +969,7 @@
     ],
     "verification": "29 editable implementation views/states. Search fields, history rows and saved-revision modal updated in place; no raster UI; Noto Sans JP verified. 13 Miniflare tests pass. Desktop browser confirms Japanese body search, empty result and saved-revision preview. AI/provider and full mobile/English parity remain unverified.",
     "sourceHashes": {
-      "app/page.tsx": "f848c2bfe35c4f350403b2eda31f53942b86e84e1a668158263b60b94c5a251b",
+      "app/page.tsx": "3800f43d97022557949831b2e59e3bcc2cabbe8211716481b1594c04c892f469",
       "app/globals.css": "5b33a32903c38969e0e3e893b7eb0798b04bfa431c09be3bbc0faa310ba8bcea",
       "components/studio/use-studio.ts": "ca15a5fbc154d262e669f6a6e03a80dc452519bc3967066b3c042832d1da376c",
       "components/studio/workspace-views.tsx": "464e8a11e2e598b17121e698f9925897e2b28211713e240ae9af8f5b05aba533",
@@ -979,7 +981,8 @@
       "lib/agents/marketing.ts": "da40f52a9d6cd966fb76f36da4f24e41b71f2f6da63a53ecc67dd3b762ba49a4",
       "lib/domain/export.ts": "fac4b32c074a818684646df88cf644771cab81fb5bc43582de9969fc5993136d",
       "components/studio/history.tsx": "7e1fc976e5f54d827768b34f7ec0d360aae3f808796d341502714d297a48af90",
-      "components/studio/production-search.tsx": "fb65ec4c7b7d4b5d2767e7494824654c25a68011cc5f8a5825ed4aa3e627ff1b"
+      "components/studio/production-search.tsx": "fb65ec4c7b7d4b5d2767e7494824654c25a68011cc5f8a5825ed4aa3e627ff1b",
+      "app/sign-in/[[...sign-in]]/page.tsx": "53ef9e50ec85d2d745bb501e7460bd60fec4c5e87b2f57b8a4c87de4d8a5a6a1"
     },
     "lastChange": {
       "screens": [
@@ -1001,6 +1004,12 @@
         "113:10100"
       ],
       "validation": "Existing screen IDs preserved. Targeted overflow/opacity fix visually verified. Dialog text is representative content, not a claim of live AI output."
+    },
+    "vercelAuth": {
+      "entry": "118:10099",
+      "pending": "118:10110",
+      "status": "editable login entry and missing-config state synchronized; hosted Clerk UI not yet connected or verified",
+      "preservedSitesSignin": "103:10789"
     }
   }
 }

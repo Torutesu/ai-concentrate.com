@@ -13,10 +13,17 @@ try {
     format: "esm",
     packages: "external",
   });
-  const result = spawnSync(process.execPath, ["--test", output], {
-    stdio: "inherit",
-  });
-  process.exitCode = result.status ?? 1;
+  for (const database of ["d1", "libsql"]) {
+    console.log(`Database contract: ${database}`);
+    const result = spawnSync(process.execPath, ["--test", output], {
+      stdio: "inherit",
+      env: { ...process.env, TEST_DATABASE: database },
+    });
+    if (result.status !== 0) {
+      process.exitCode = result.status ?? 1;
+      break;
+    }
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

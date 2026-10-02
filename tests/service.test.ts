@@ -2,6 +2,10 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Miniflare } from "miniflare";
+import { createClient, type Client } from "@libsql/client";
+import { LibsqlDatabase } from "../lib/platform/libsql";
+import type { Database } from "../lib/platform/database";
+let libsqlClient: Client | undefined;
 import { Repository } from "../lib/server/repository";
 import { StudioService, generateProposal } from "../lib/server/service";
 import { newProduction } from "../lib/domain/seed";
@@ -11,17 +15,23 @@ let mf: Miniflare,
   other: StudioService,
   viewer: StudioService;
 before(async () => {
-  mf = new Miniflare({
-    modules: true,
-    script: 'export default {fetch(){return new Response("ok")}}',
-    compatibilityDate: "2026-05-15",
-    d1Databases: ["DB"],
-  });
-  const db = await mf.getD1Database("DB");
+  let db: Database;
+  if (process.env.TEST_DATABASE === "libsql") {
+    libsqlClient = createClient({ url: "file::memory:" });
+    db = new LibsqlDatabase(libsqlClient);
+  } else {
+    mf = new Miniflare({
+      modules: true,
+      script: 'export default {fetch(){return new Response("ok")}}',
+      compatibilityDate: "2026-05-15",
+      d1Databases: ["DB"],
+    });
+    db = (await mf.getD1Database("DB")) as unknown as Database;
+  }
   const sql = await readFile("drizzle/0000_wonderful_colleen_wing.sql", "utf8");
   for (const statement of sql.split("--> statement-breakpoint"))
     await db.prepare(statement.trim()).run();
-  repo = new Repository(db as unknown as D1Database);
+  repo = new Repository(db);
   await repo.create("alice", "A", "wa");
   await repo.create("bob", "B", "wb");
   await db
@@ -35,6 +45,7 @@ before(async () => {
 });
 after(async () => {
   await mf?.dispose();
+  libsqlClient?.close();
 });
 test("tenant and role isolation applies to reads and writes", async () => {
   await assert.rejects(other.read("wa"), { code: "NOT_FOUND" });

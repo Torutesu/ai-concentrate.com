@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": "22.x"
   },
   "scripts": {
     "install:ci": "node scripts/install-ci.mjs",
@@ -12,11 +12,15 @@
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "test": "node scripts/test.mjs"
+    "test": "node scripts/test.mjs",
+    "build:vercel": "next build",
+    "dev:vercel": "next dev --port 3000"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@clerk/nextjs": "^7.9.10",
     "@hookform/resolvers": "^5.7.1",
+    "@libsql/client": "^0.18.0",
     "@shadcn/react": "^0.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

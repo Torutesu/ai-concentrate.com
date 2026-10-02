@@ -1,3 +1,4 @@
+import type { Database } from "../platform/database";
 import {
   DomainError,
   productionSchema,
@@ -19,7 +20,7 @@ export async function digest(value: string) {
     .join("");
 }
 export class Repository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
   async role(workspaceId: string, userId: string): Promise<Role> {
     const row = await this.db
       .prepare(

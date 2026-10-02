@@ -1,0 +1,11 @@
+outputs
+.wrangler
+.sites-runtime
+.git
+design
+node_modules
+.env*
+
+.next
+.next-vercel
+dist

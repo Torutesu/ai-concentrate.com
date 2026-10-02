@@ -1,5 +1,4 @@
-import { env } from "cloudflare:workers";
-import { getChatGPTUser } from "../../app/chatgpt-auth";
+import { database, getUser } from "@/lib/platform/runtime";
 import { Repository } from "./repository";
 import { StudioService } from "./service";
 import { DomainError } from "../domain/models";
@@ -14,16 +13,10 @@ export async function service(request: Request, write = false) {
         "Cross-origin writes are not allowed.",
       );
   }
-  const user = await getChatGPTUser();
+  const user = await getUser();
   if (!user)
     throw new DomainError("UNAUTHENTICATED", 401, "Sign in to continue.");
-  if (!env.DB)
-    throw new DomainError(
-      "STORAGE_UNAVAILABLE",
-      503,
-      "Database is not configured.",
-    );
-  return new StudioService(new Repository(env.DB), user.userId);
+  return new StudioService(new Repository(database()), user.userId);
 }
 export async function body<T>(r: Request, schema: ZodType<T>): Promise<T> {
   if (!r.headers.get("content-type")?.includes("application/json"))

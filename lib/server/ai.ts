@@ -1,10 +1,9 @@
 import { generationInstructions } from "../agents/marketing";
-import { env } from "cloudflare:workers";
+import { aiConfig } from "@/lib/platform/runtime";
 import { z } from "zod";
 import { DomainError } from "../domain/models";
 import type { GenerationProvider } from "./service";
-const config = () =>
-  env as unknown as { OPENAI_API_KEY?: string; OPENAI_MODEL?: string };
+const config = aiConfig;
 export const aiConfigured = () =>
   Boolean(config().OPENAI_API_KEY && config().OPENAI_MODEL);
 export function aiProvider(): GenerationProvider {

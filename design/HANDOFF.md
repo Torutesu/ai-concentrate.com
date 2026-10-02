@@ -64,3 +64,9 @@ Added inline brief fields, JSON import/export, Markdown export, language persist
 
 ## 2026-10-02 — search and saved revisions
 Workspace-wide title/body search replaces loaded-title filtering. Paginated history and immutable snapshot preview use shared operations (14 MCP tools). Existing implementation history 98:8656 and saved-version state 103:10674 updated in place; search fields updated across the editor variants. Designer explorations untouched. See release-readiness.md for current verification and remaining limits; older local-only notes above are historical.
+
+## 2026-10-02 — independent Vercel hosting
+User authorized moving to Vercel. Existing Sites screens/publication remain intact.
+Editable auth entry 118:10099 and missing-provider state 118:10110 were added next
+to implementation states, reusing native button/text components. Connected Clerk
+form verification is pending provider provisioning; do not claim end-to-end login.

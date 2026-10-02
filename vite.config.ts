@@ -52,6 +52,14 @@ export default defineConfig(async ({ command }) => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    resolve: {
+      alias: {
+        "@/lib/platform/runtime": new URL(
+          "./lib/platform/sites.ts",
+          import.meta.url,
+        ).pathname,
+      },
+    },
     server: {
       ...(managedLinux
         ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] }
