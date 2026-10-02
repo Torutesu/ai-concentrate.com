@@ -1,0 +1,24 @@
+let di=0;const overlays=[];
+function dialog(key,title){const n=panel(page,'Overlay / '+title,560,16,24);n.x=8000+(di%4)*640;n.y=80+Math.floor(di++/4)*760;states[key]=n.id;overlays.push(n.id);const h=between(row(n,'Dialog heading',512));text(h,title,'Heading');button(h,'閉じる','__close');return n;}
+function actions(p,label,to,secondary='キャンセル'){const r=row(p,'Dialog actions',512);button(r,label,to,true);button(r,secondary,'__close');}
+const consent=dialog('integrationConsent','Xを接続');text(consent,'接続先：ShogunAI','Label');text(consent,'Xの認証画面でアカウントと権限を確認します。投稿する内容は、接続後に確認できます。','Body','muted',512);actions(consent,'認証に進む','oauthWaiting');
+const wait=dialog('oauthWaiting','Xでの認証を待っています');text(wait,'認証画面を閉じた場合は、もう一度開いてください。','Body','muted',512);button(wait,'認証画面を開き直す','oauthWaiting');button(wait,'接続結果を確認','accountConfirm',true);button(wait,'キャンセル','oauthCancelled');
+const account=dialog('accountConfirm','接続するアカウントを確認');field(account,'アカウント','@shogunai_demo',512);field(account,'利用するワークスペース','ShogunAI',512);text(account,'このアカウントで投稿できる権限を確認しました。','Small','muted',512);actions(account,'このアカウントを接続','integrationConnected');
+const cancelled=dialog('oauthCancelled','接続を中止しました');text(cancelled,'原稿・予約は変更されていません。','Body','muted',512);actions(cancelled,'もう一度接続','integrationConsent','閉じる');
+for(const [key,back]of [['homeConnect','home'],['calendarConnect','calendar'],['contentConnect','contentX']]){const d=dialog(key,'公開先を接続');field(d,'公開先','X / @shogunai_demo',512);text(d,'接続先を確認して、編集中の原稿に戻ります。','Body','muted',512);actions(d,'接続して原稿に戻る',back);}
+const schedule=dialog('calendarConfirm','予約内容を確認');field(schedule,'投稿先','ShogunAI / X / @shogunai_demo',512);field(schedule,'公開日時','2026/10/05 09:00 · Asia/Tokyo',512);field(schedule,'本文','月曜の朝、最初の仕事が「先週の仕事を思い出すこと」になっていませんか。',512);text(schedule,'予約時点の原稿を公開します。変更する場合は再確認できます。','Small','muted',512);actions(schedule,'この内容で予約','calendarScheduled');
+const newCal=dialog('calendarNew','予定を作成');field(newCal,'コンテンツ','月曜の仕事復帰 ▾',512);field(newCal,'公開先','X / @shogunai_demo ▾',512);field(newCal,'日時','2026/10/05 09:00',512);field(newCal,'タイムゾーン','Asia/Tokyo',512);actions(newCal,'予約内容を確認','calendarConfirm');
+const reschedule=dialog('calendarReschedule','公開日時を変更');field(reschedule,'変更前','10月5日（月）09:00',512);field(reschedule,'変更後','10月6日（火）09:00',512);text(reschedule,'Asia/Tokyo · 同時刻に別の予定が1件あります。','Small','muted',512);actions(reschedule,'変更を保存','calendarMoved');
+const cancel=dialog('calendarCancel','予約を取り消しますか？');text(cancel,'公開予約を取り消します。本文と素材は下書きに残ります。','Body','muted',512);actions(cancel,'予約を取り消す','calendar');
+const filter=dialog('calendarFilter','表示する予定');for(const t of ['✓  X','✓  LinkedIn','✓  記事・CMS','✓  動画','✓  下書き・承認待ち・予約済み'])text(filter,t,'Body');actions(filter,'適用','calendar');
+const cSchedule=dialog('contentSchedule','投稿を予約');field(cSchedule,'公開先','X / @shogunai_demo',512);field(cSchedule,'日時','2026/10/05 09:00 · Asia/Tokyo',512);text(cSchedule,'月曜の仕事復帰 · 日本語 · 保存済みの原稿','Small','muted',512);actions(cSchedule,'この内容で予約','contentScheduled');
+const locale=dialog('contentLocale','制作言語');button(locale,'日本語','content');button(locale,'English · 北米','contentEnglish');text(locale,'表示言語は変更せず、この原稿の言語を切り替えます。','Small','muted',512);
+const cms=dialog('contentCMS','CMSに下書きを送信');field(cms,'サイト','WordPress / example.com',512);field(cms,'形式','新規の下書き',512);text(cms,'タイトル・本文・画像を送信します。サイトへの公開はまだ行いません。','Small','muted',512);actions(cms,'下書きを送信','contentCMSSent');
+const ai=dialog('strategyAI','戦略を調整');field(ai,'変更したいこと','週5時間で、Xとショート動画に集中したい',512);text(ai,'現在の戦略を残して、変更案を作成します。','Small','muted',512);actions(ai,'変更案を作る','strategyCompare');
+const add=dialog('contextAdd','情報を追加');tabs(add,[['URL',null,true],['Markdown',null],['GitHub','githubScope']],512);field(add,'URL','https://',512);text(add,'または、.md ファイルをここに追加','Small','muted',512);actions(add,'読み込む','contextLoading');
+const gh=dialog('githubScope','GitHubの接続範囲');field(gh,'リポジトリ','ShogunAI / docs',512);field(gh,'ブランチ・パス','main / README.md・docs/',512);text(gh,'製品情報の読み取りのみ。PRを作成する場合は、別途書き込み権限を確認します。','Small','muted',512);actions(gh,'範囲を保存','context');
+const ga=dialog('analyticsConnect','GA4のプロパティを選択');field(ga,'Googleアカウント','接続するアカウントを選択',512);field(ga,'プロパティ','ShogunAI（デモ） ▾',512);text(ga,'レポートの読み取りに利用します。','Small','muted',512);actions(ga,'接続して読み込む','analyticsLoading');
+const gsc=dialog('analyticsSearch','Search Consoleを接続');field(gsc,'サイト','https://shogunaios.com/ ▾',512);text(gsc,'アクセス可能なサイトを選択します。検索データの反映には時間がかかる場合があります。','Small','muted',512);actions(gsc,'サイトを接続','analyticsLoading');
+const disconnect=dialog('integrationDisconnect','接続を解除しますか？');text(disconnect,'このアカウントの予約2件を保留します。下書きと過去の実行履歴は残ります。','Body','muted',512);actions(disconnect,'解除して予約を保留','integrationExpired');
+const range=dialog('analyticsRange','期間を選択');field(range,'開始日','2026/09/03',512);field(range,'終了日','2026/10/02',512);field(range,'比較','前の期間',512);actions(range,'適用','analytics');
+return {...result(),overlays};

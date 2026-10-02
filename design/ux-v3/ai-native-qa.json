@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-02",
+  "frames": 39,
+  "texts": 741,
+  "instances": 230,
+  "imageNodes": [],
+  "overflow": [],
+  "brokenDestinations": [],
+  "checkedDestinations": 48,
+  "screenshots": [
+    "ai-video-editor.png",
+    "ai-mcp-connection.png",
+    "ai-linked-guide.png"
+  ],
+  "runtimeVerified": false
+}

@@ -1,0 +1,22 @@
+const s=await root('20:722','strategy','戦略');
+const sr=between(row(s.body,'Strategy period',1152));text(sr,'今週の施策','Heading');badge(sr,'計測設定が必要');
+const [sl,sd]=split(s.body,320,812);
+text(sl,'優先する課題','Label');text(sl,'仕事を再開するとき、\n前回の判断を探し直す。','Heading','ink',280);text(sl,'対象：複数案件を持つフリーランス','Small','muted',280);rule(sl,280);text(sl,'今週の制作枠','Label');text(sl,'デモ 1本 ＋ X投稿 2本','Body');text(sl,'担当 Toru · 使える時間 5時間','Small','muted',280);button(sl,'製品の根拠を確認','context');
+const sh=between(row(sd,'Experiment identity',772));text(sh,'月曜の仕事復帰','Heading');badge(sh,'施策 E-001');
+text(sd,'検証する仮説','Label');text(sd,'「前回の判断から再開する」実演は、機能の説明だけより体験利用につながるか。','Body','ink',772);
+const sm=row(sd,'Measurement details',772,16);field(sm,'主要指標','流入 → 初回の価値体験',378);field(sm,'評価日','10月16日 · 母数不足なら継続',378);
+field(sd,'CTA・遷移先','ShogunAIを試す → /ja?utm_campaign=resume-work',772);
+note(sd,'公開前に確認','初回価値体験イベントを定義し、計測を接続してください。数値はまだ取得していません。',772);
+const sa=row(sd,'Strategy actions',772);button(sa,'この施策の制作を開く','content',true);button(sa,'計測を設定','analytics');
+const a=await root('22:1197','analytics','分析');
+const ar=between(row(a.body,'Scope',1152));text(ar,'月曜の仕事復帰 · E-001','Heading');text(ar,'10月2日–16日','Small','muted');
+const metrics=row(a.body,'Funnel',1152,16);for(const [label,noteText]of [['流入','施策リンクからの訪問'],['登録','同期間の登録完了'],['初回の価値体験','イベントの定義が必要']]){const c=panel(metrics,label,373,8,20);text(c,label,'Label');text(c,'—','Title');text(c,noteText,'Small','muted',333);}
+const [al,ad]=split(a.body,560,572);text(al,'計測をつなぐ','Heading');field(al,'取得元','GA4 · 未接続',520);field(al,'価値体験イベント','未設定',520);text(al,'登録後に、ユーザーが価値を得た操作を指定。','Small','muted',520);button(al,'イベントと流入を設定','measurement',true);
+text(ad,'次の判断','Heading');badge(ad,'データ待ち');text(ad,'続ける / 切り口を変える / 止める','Body','ink',532);text(ad,'判断は計測後に記録します。流入の母数、制作時間、採用された成果物を合わせて確認。','Small','muted',532);rule(ad,532);text(ad,'比較するもの','Label');text(ad,'実演の投稿と、機能を説明する投稿。\n媒体・期間・流入差を残して評価。','Small','ink',532);button(ad,'施策の仮説を確認','strategy');
+const h=await root('20:830','home','今日');
+const hr=between(row(h.body,'Workspace status',1152));text(hr,'ShogunAIの今週','Heading');text(hr,'10月2日（金）','Small','muted');
+const [hl,hd]=split(h.body,360,772);text(hl,'次に進める作業','Label');const q=panel(hl,'Selected work',320,8,16);q.fills=[paint('mint')];text(q,'月曜の仕事復帰','Card title');text(q,'E-001 · デモのシーン02を確認','Small','muted',288);target(q,'video');text(hl,'公開前の確認','Label');button(hl,'計測イベントを設定','analytics');button(hl,'Xアカウントを接続','integrations');rule(hl,320);text(hl,'今週の施策','Label');text(hl,'デモ1本・X投稿2本\n初回の価値体験につながるかを検証','Small','ink',320);
+text(hd,'月曜の仕事復帰','Heading');badge(hd,'変更案の確認待ち');text(hd,'前回、何を決めた？','Title');text(hd,'動画のシーン02を短くする変更案があります。\n台本・音声・字幕への影響を確認してから適用。','Body','ink',732);note(hd,'残っている作業','レビュー → 公開前チェック → 日時を指定',732);const ha=row(hd,'Next action',732);button(ha,'変更案を確認','review',true);button(ha,'企画全体を開く','content');
+const c=await root('22:526','context','製品コンテキスト');
+const [cl,cd]=split(c.body,320,812);text(cl,'情報ソース','Heading');for(const x of ['公式サイト · 10月2日確認','product-brief.md · 更新あり','GitHub / docs · 読み取り専用'])text(cl,x,'Small','ink',280);button(cl,'情報を追加','sources');text(cd,'発信する主張と根拠','Heading');for(const [title,status,source]of [['仕事の記憶を呼び出す','公式の訴求','shogunaios.com/ja · 10月2日'],['前回の判断から仕事を再開する','実演で要確認','施策 E-001 · 収録を確認して確定'],['作業時間を削減する','定量効果は未確認','数値・顧客の発言は未登録']]){const x=box(cd,'Claim',772,'VERTICAL',6);const r=between(row(x,'Claim heading',772));text(r,title,'Card title');badge(r,status);text(x,source,'Small','muted',772);rule(x,772);}text(cd,'未確認の効果を、実績として生成しません。','Small','muted',772);button(cd,'施策に戻る','strategy',true);
+return result();
