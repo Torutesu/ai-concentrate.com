@@ -292,3 +292,86 @@ test("keyset pages contain only summaries and do not lose entries across page bo
   await assert.rejects(other.page("pages", 2), { code: "NOT_FOUND" });
   await assert.rejects(owner.page("pages", 2, "broken"), { code: "CURSOR" });
 });
+
+test("search covers unloaded titles and bodies with literal wildcards and tenant isolation", async () => {
+  const { executeOperation } = await import("../lib/server/operations");
+  await repo.create("alice", "Search", "search");
+  const data = newProduction("企画の検索");
+  data.items[0].body = "本文だけの単語 100%_literal";
+  await owner.save("search", "find", data, 0, "search-create");
+  await owner.save(
+    "search",
+    "skip",
+    newProduction("Unrelated"),
+    0,
+    "search-skip",
+  );
+  for (const query of ["企画", "本文だけ", "%_", "LITERAL"]) {
+    const page = await owner.page("search", 1, undefined, query);
+    assert.deepEqual(
+      page.items.map((i) => i.id),
+      ["find"],
+    );
+    assert.equal(page.nextCursor, null);
+  }
+  assert.equal(
+    (await owner.page("search", 1, undefined, "absent")).items.length,
+    0,
+  );
+  await assert.rejects(
+    executeOperation(other, "production_list", {
+      workspaceId: "search",
+      query: "本文",
+    }),
+    { code: "NOT_FOUND" },
+  );
+  await assert.rejects(
+    executeOperation(owner, "production_list", {
+      workspaceId: "search",
+      query: "a".repeat(201),
+    }),
+  );
+});
+
+test("history pages retain all revisions and snapshots are read-only and tenant-scoped", async () => {
+  const { executeOperation } = await import("../lib/server/operations");
+  const data = newProduction("History");
+  for (let i = 0; i < 33; i++)
+    await owner.save(
+      "wa",
+      "long-history",
+      { ...data, title: `Revision ${i + 1}` },
+      i,
+      `history-${i}`,
+    );
+  let before: number | undefined;
+  const seen: number[] = [];
+  do {
+    const page = await owner.historyPage("wa", "long-history", 10, before);
+    seen.push(...page.items.map((r) => r.revision));
+    before = page.nextBefore ?? undefined;
+  } while (before);
+  assert.deepEqual(
+    seen,
+    Array.from({ length: 33 }, (_, i) => 33 - i),
+  );
+  const snapshot = await viewer.snapshot("wa", "long-history", 1);
+  assert.equal(snapshot.data.title, "Revision 1");
+  assert.equal((await repo.get("wa", "long-history"))?.revision, 33);
+  await assert.rejects(other.snapshot("wa", "long-history", 1), {
+    code: "NOT_FOUND",
+  });
+  await assert.rejects(other.historyPage("wa", "long-history", 10), {
+    code: "NOT_FOUND",
+  });
+  await assert.rejects(owner.snapshot("wa", "long-history", 999), {
+    code: "NOT_FOUND",
+  });
+  await assert.rejects(
+    executeOperation(owner, "production_history", {
+      workspaceId: "wa",
+      productionId: "long-history",
+      limit: 1000,
+    }),
+  );
+});

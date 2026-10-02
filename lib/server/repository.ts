@@ -153,7 +153,12 @@ export class Repository {
       throw new DomainError("CONFLICT", 409, "A newer revision exists.");
     return receipt;
   }
-  async pageProductions(workspaceId: string, limit: number, cursor?: string) {
+  async pageProductions(
+    workspaceId: string,
+    limit: number,
+    cursor?: string,
+    query = "",
+  ) {
     let date = "",
       id = "";
     if (cursor) {
@@ -172,9 +177,9 @@ export class Repository {
     }
     const rows = await this.db
       .prepare(
-        "SELECT id,revision,updated_at,json_extract(data,'$.title') AS title,json_extract(data,'$.plannedDate') AS plannedDate,json_array_length(data,'$.items') AS itemCount FROM productions WHERE workspace_id=? AND (?='' OR updated_at<? OR (updated_at=? AND id<?)) ORDER BY updated_at DESC,id DESC LIMIT ?",
+        "SELECT id,revision,updated_at,json_extract(data,'$.title') AS title,json_extract(data,'$.plannedDate') AS plannedDate,json_array_length(data,'$.items') AS itemCount FROM productions WHERE workspace_id=? AND (?='' OR instr(lower(json_extract(data,'$.title')),lower(?))>0 OR EXISTS (SELECT 1 FROM json_each(data,'$.items') item WHERE instr(lower(json_extract(item.value,'$.body')),lower(?))>0)) AND (?='' OR updated_at<? OR (updated_at=? AND id<?)) ORDER BY updated_at DESC,id DESC LIMIT ?",
       )
-      .bind(workspaceId, date, date, date, id, limit + 1)
+      .bind(workspaceId, query, query, query, date, date, date, id, limit + 1)
       .all<{
         id: string;
         revision: number;
@@ -212,6 +217,26 @@ export class Repository {
         .bind(workspaceId, id)
         .all()
     ).results;
+  }
+  async historyPage(
+    workspaceId: string,
+    id: string,
+    limit: number,
+    before?: number,
+  ) {
+    const rows = (
+      await this.db
+        .prepare(
+          "SELECT revision,actor_id AS actorId,created_at AS createdAt FROM revisions WHERE workspace_id=? AND production_id=? AND (? IS NULL OR revision<?) ORDER BY revision DESC LIMIT ?",
+        )
+        .bind(workspaceId, id, before ?? null, before ?? null, limit + 1)
+        .all<{ revision: number; actorId: string; createdAt: string }>()
+    ).results;
+    const items = rows.slice(0, limit);
+    return {
+      items,
+      nextBefore: rows.length > limit ? items.at(-1)!.revision : null,
+    };
   }
   async sources(workspaceId: string): Promise<Source[]> {
     return (

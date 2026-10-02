@@ -27,9 +27,29 @@ export class StudioService {
       throw new DomainError("VALIDATION", 400, "Invalid workspace name.");
     return this.repository.create(this.actorId, name.trim(), id);
   }
-  async page(workspaceId: string, limit = 20, cursor?: string) {
+  async page(workspaceId: string, limit = 20, cursor?: string, query = "") {
     await this.repository.role(workspaceId, this.actorId);
-    return this.repository.pageProductions(workspaceId, limit, cursor);
+    return this.repository.pageProductions(workspaceId, limit, cursor, query);
+  }
+  async historyPage(
+    workspaceId: string,
+    id: string,
+    limit: number,
+    before?: number,
+  ) {
+    await this.repository.role(workspaceId, this.actorId);
+    if (!(await this.repository.get(workspaceId, id)))
+      throw new DomainError("NOT_FOUND", 404, "Production not found.");
+    return this.repository.historyPage(workspaceId, id, limit, before);
+  }
+  async snapshot(workspaceId: string, id: string, revision: number) {
+    await this.repository.role(workspaceId, this.actorId);
+    return {
+      workspaceId,
+      productionId: id,
+      revision,
+      data: await this.repository.revision(workspaceId, id, revision),
+    };
   }
   async restore(
     workspaceId: string,

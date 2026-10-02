@@ -2,7 +2,8 @@
 import { useEffect, useState, useRef } from "react";
 import { productionSchema, type ContentItem } from "../../lib/domain/models";
 import { productionMarkdown } from "../../lib/domain/export";
-import { api } from "../../lib/studio-client";
+import { History } from "./history";
+import { ProductionSearch } from "./production-search";
 import type { StudioController } from "./use-studio";
 import { labels, type Tab } from "./i18n";
 import { Action, Badge, Empty, Field, Panel } from "./ui";
@@ -22,8 +23,7 @@ const tabs: Tab[] = [
 export function Editor({ s }: { s: StudioController }) {
   const t = labels[s.locale],
     en = s.locale === "en";
-  const [query, setQuery] = useState(""),
-    [itemId, setItemId] = useState(""),
+  const [itemId, setItemId] = useState(""),
     [outputLocale, setOutputLocale] = useState<"ja" | "en">("ja"),
     [instruction, setInstruction] = useState(""),
     [aspect, setAspect] = useState("16:9"),
@@ -319,44 +319,18 @@ export function Editor({ s }: { s: StudioController }) {
               }
             >
               <Panel className="selection">
-                <Field
-                  label={
-                    en ? "Search loaded titles" : "読み込み済みの企画名を検索"
-                  }
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {s.tab === "video"
-                  ? items.map((i, n) => (
-                      <button
-                        key={i.id}
-                        className={`list-item ${selected?.id === i.id ? "selected" : ""}`}
-                        onClick={() => setItemId(i.id)}
-                      >
-                        {String(n + 1).padStart(2, "0")} {i.title}
-                      </button>
-                    ))
-                  : s.productions
-                      .filter((x) =>
-                        x.title.toLowerCase().includes(query.toLowerCase()),
-                      )
-                      .map((x) => (
-                        <button
-                          key={x.id}
-                          className={`list-item ${s.selected?.id === x.id ? "selected" : ""}`}
-                          onClick={() => s.select(x.id)}
-                        >
-                          <strong>{x.title}</strong>
-                          <small>
-                            v{x.revision} · {x.itemCount}{" "}
-                            {en ? "items" : "項目"}
-                          </small>
-                        </button>
-                      ))}
-                {s.nextCursor && (
-                  <Action disabled={s.busy} onClick={s.loadMore}>
-                    {en ? "Load more ideas" : "企画をさらに読み込む"}
-                  </Action>
+                {s.tab === "video" ? (
+                  items.map((i, n) => (
+                    <button
+                      key={i.id}
+                      className={`list-item ${selected?.id === i.id ? "selected" : ""}`}
+                      onClick={() => setItemId(i.id)}
+                    >
+                      {String(n + 1).padStart(2, "0")} {i.title}
+                    </button>
+                  ))
+                ) : (
+                  <ProductionSearch key={s.workspaceId} s={s} />
                 )}
                 <Action disabled={!canEdit} onClick={addItem}>
                   ＋ {en ? "Add item" : "項目を追加"}
@@ -601,65 +575,6 @@ function Review({ s }: { s: StudioController }) {
     </Empty>
   );
 }
-function History({ s }: { s: StudioController }) {
-  const [rows, setRows] = useState<{ revision: number; createdAt: string }[]>(
-      [],
-    ),
-    [error, setError] = useState(""),
-    [restoreVersion, setRestoreVersion] = useState<number | null>(null);
-  useEffect(() => {
-    const c = new AbortController();
-    api<{ history: typeof rows }>(
-      `/workspaces/${s.workspaceId}/productions/${s.selected?.id}`,
-      { signal: c.signal },
-    )
-      .then((r) => setRows(r.history))
-      .catch((e) => {
-        if (!c.signal.aborted) setError(String(e));
-      });
-    return () => c.abort();
-  }, [s.workspaceId, s.selected?.id, s.selected?.revision]);
-  return (
-    <Panel>
-      <h2>{s.locale === "en" ? "Revision history" : "編集履歴"}</h2>
-      {restoreVersion !== null && (
-        <RestoreDialog
-          revision={restoreVersion}
-          en={s.locale === "en"}
-          close={() => setRestoreVersion(null)}
-          confirm={() => {
-            const revision = restoreVersion;
-            setRestoreVersion(null);
-            void s.restore(revision);
-          }}
-        />
-      )}
-      {error && <p role="alert">{error}</p>}
-      {rows.map((r) => (
-        <div key={r.revision} className="identity">
-          <strong>v{r.revision}</strong>
-          <span>{new Date(r.createdAt).toLocaleString(s.locale)}</span>
-          {r.revision === s.selected?.revision ? (
-            <Badge>{s.locale === "en" ? "Current" : "現在の版"}</Badge>
-          ) : (
-            <Action
-              disabled={s.busy || s.dirty || s.workspace?.role === "viewer"}
-              onClick={() => setRestoreVersion(r.revision)}
-            >
-              {s.locale === "en" ? "Restore" : "復元"}
-            </Action>
-          )}
-        </div>
-      ))}
-      <p className="muted">
-        {s.locale === "en"
-          ? "Save changes before restoring. Locked text remains protected."
-          : "変更を保存してから復元してください。ロックした本文は保護されます。"}
-      </p>
-    </Panel>
-  );
-}
-
 function ReferenceDialog({ en, close }: { en: boolean; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -682,48 +597,6 @@ function ReferenceDialog({ en, close }: { en: boolean; close: () => void }) {
         src="/design-assets/shogun-reference.png"
         alt="ShogunAI reference, 2026-09-06"
       />
-    </dialog>
-  );
-}
-
-function RestoreDialog({
-  revision,
-  en,
-  close,
-  confirm,
-}: {
-  revision: number;
-  en: boolean;
-  close: () => void;
-  confirm: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      className="preview-dialog"
-      onCancel={close}
-      aria-labelledby="restore-title"
-    >
-      <h2 id="restore-title">
-        {en ? `Restore v${revision}?` : `v${revision}を復元しますか？`}
-      </h2>
-      <p>
-        {en
-          ? "A new revision will be created. Current history is preserved."
-          : "新しい版として保存します。現在の編集履歴も残ります。"}
-      </p>
-      <div className="actions">
-        <Action autoFocus onClick={close}>
-          {en ? "Cancel" : "キャンセル"}
-        </Action>
-        <Action primary onClick={confirm}>
-          {en ? "Restore" : "復元する"}
-        </Action>
-      </div>
     </dialog>
   );
 }

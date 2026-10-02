@@ -61,3 +61,6 @@ Figma agent node 89:10254 updated in place; history node 98:8656 added. Native e
 
 The implementation-sync area now covers 29 editable native views/states. See `complete-view-state.json` and main ledger for added IDs. Existing design explorations remain untouched. The authoring script records creation; do not blindly rerun it to overwrite designer changes.
 Added inline brief fields, JSON import/export, Markdown export, language persistence, timed requests, summary pagination/lazy detail retrieval, explicit unloaded-calendar notice and application-level restore confirmation. MCP exposes 12 shared operations. `docs/release-readiness.md` explicitly separates delivered features, setup dependencies and still-unimplemented commercial/video modules. Never claim those planned modules are shipped.
+
+## 2026-10-02 — search and saved revisions
+Workspace-wide title/body search replaces loaded-title filtering. Paginated history and immutable snapshot preview use shared operations (14 MCP tools). Existing implementation history 98:8656 and saved-version state 103:10674 updated in place; search fields updated across the editor variants. Designer explorations untouched. See release-readiness.md for current verification and remaining limits; older local-only notes above are historical.

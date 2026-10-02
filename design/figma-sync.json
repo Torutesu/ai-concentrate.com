@@ -927,7 +927,7 @@
   "synchronizationMode": "agent-required-per-ui-change; no background watcher; no automatic bidirectional sync",
   "implementation": {
     "date": "2026-10-02",
-    "status": "working-studio-29-view-coverage",
+    "status": "working-studio-search-revision-preview",
     "pageId": "20:391",
     "screenIds": {
       "home": "89:9207",
@@ -965,19 +965,42 @@
       "92:8637",
       "92:8641"
     ],
-    "verification": "29 native editable implementation views/states; existing design explorations preserved. Structural checks and representative screenshots reviewed. Eleven Miniflare tests pass; live model evaluation awaits provider setup. Full commercial prototype functionality is not implemented.",
+    "verification": "29 editable implementation views/states. Search fields, history rows and saved-revision modal updated in place; no raster UI; Noto Sans JP verified. 13 Miniflare tests pass. Desktop browser confirms Japanese body search, empty result and saved-revision preview. AI/provider and full mobile/English parity remain unverified.",
     "sourceHashes": {
       "app/page.tsx": "f848c2bfe35c4f350403b2eda31f53942b86e84e1a668158263b60b94c5a251b",
-      "app/globals.css": "52383973e9e0bf8fcf5873d44cc2d335ec8115dd9ac16ce78c4facbb48b6085e",
+      "app/globals.css": "5b33a32903c38969e0e3e893b7eb0798b04bfa431c09be3bbc0faa310ba8bcea",
       "components/studio/use-studio.ts": "ca15a5fbc154d262e669f6a6e03a80dc452519bc3967066b3c042832d1da376c",
       "components/studio/workspace-views.tsx": "464e8a11e2e598b17121e698f9925897e2b28211713e240ae9af8f5b05aba533",
       "components/studio/i18n.ts": "3e79dcc35921cfe41e7abf623d5eaacd2a0fb0d8a43143ba72075b89a39424b0",
       "components/studio/studio.tsx": "07d5eabe8d10fc8ae03dde2ceb28d251e06a6322fe056bb2d167c0a684f06731",
-      "components/studio/editor.tsx": "13049e021cf83f499c156370b1a98fac630ee3b4dec849c4b0c2873572e1dc67",
+      "components/studio/editor.tsx": "0c2539824339e0aa75a1f63e53143bce9cb137dc4eb0185ff8612b8848a2a4df",
       "components/studio/ui.tsx": "c249c0165794ffb0c7fbcdb31e5780d823411eaa017ef72fada2808436120969",
       "components/studio/agent-review.tsx": "dffe6d621bbea8eef1dd02b96d00b28473460cfc666a0c1f79a57ee0560ae641",
       "lib/agents/marketing.ts": "da40f52a9d6cd966fb76f36da4f24e41b71f2f6da63a53ecc67dd3b762ba49a4",
-      "lib/domain/export.ts": "fac4b32c074a818684646df88cf644771cab81fb5bc43582de9969fc5993136d"
+      "lib/domain/export.ts": "fac4b32c074a818684646df88cf644771cab81fb5bc43582de9969fc5993136d",
+      "components/studio/history.tsx": "7e1fc976e5f54d827768b34f7ec0d360aae3f808796d341502714d297a48af90",
+      "components/studio/production-search.tsx": "fb65ec4c7b7d4b5d2767e7494824654c25a68011cc5f8a5825ed4aa3e627ff1b"
+    },
+    "lastChange": {
+      "screens": [
+        "89:9427",
+        "103:8714",
+        "103:8853",
+        "103:8992",
+        "103:9131",
+        "98:8656",
+        "103:10674"
+      ],
+      "nodes": [
+        "112:10097",
+        "112:10098",
+        "112:10101",
+        "112:10103",
+        "112:10105",
+        "113:10099",
+        "113:10100"
+      ],
+      "validation": "Existing screen IDs preserved. Targeted overflow/opacity fix visually verified. Dialog text is representative content, not a claim of live AI output."
     }
   }
 }

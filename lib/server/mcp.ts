@@ -26,6 +26,8 @@ export const toolDefinitions = Object.entries(operationSchemas).map(
         "production_list",
         "production_get",
         "production_review",
+        "production_history",
+        "production_snapshot",
         "context_list",
         "change_list",
       ].includes(name),

@@ -21,7 +21,15 @@ export async function executeOperation(
     }
     case "production_list": {
       const p = operationSchemas[name].parse(input);
-      return s.page(p.workspaceId, p.limit, p.cursor);
+      return s.page(p.workspaceId, p.limit, p.cursor, p.query);
+    }
+    case "production_history": {
+      const p = operationSchemas[name].parse(input);
+      return s.historyPage(p.workspaceId, p.productionId, p.limit, p.before);
+    }
+    case "production_snapshot": {
+      const p = operationSchemas[name].parse(input);
+      return s.snapshot(p.workspaceId, p.productionId, p.revision);
     }
     case "production_review": {
       const p = operationSchemas[name].parse(input);

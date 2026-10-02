@@ -10,7 +10,23 @@ export const operationSchemas = {
     .object({
       ...workspace,
       cursor: z.string().max(500).optional(),
+      query: z.string().trim().max(200).default(""),
       limit: z.number().int().min(1).max(50).default(20),
+    })
+    .strict(),
+  production_history: z
+    .object({
+      ...workspace,
+      productionId: idSchema,
+      limit: z.number().int().min(1).max(50).default(20),
+      before: z.number().int().positive().optional(),
+    })
+    .strict(),
+  production_snapshot: z
+    .object({
+      ...workspace,
+      productionId: idSchema,
+      revision: z.number().int().positive(),
     })
     .strict(),
   production_review: z
@@ -38,7 +54,11 @@ export const operationDescriptions: Record<Operation, string> = {
   workspace_list: "List workspaces accessible to the authenticated user.",
   workspace_create: "Create a workspace. Reuse the same explicit ID on retry.",
   production_list:
-    "Read a page of production summaries; pass nextCursor to continue.",
+    "Search titles and content bodies in a workspace. Read a page of summaries; pass nextCursor with the same query to continue.",
+  production_history:
+    "Read revision metadata in descending order. Pass nextBefore to continue to older revisions.",
+  production_snapshot:
+    "Read an immutable saved revision without restoring or modifying it.",
   production_review:
     "Check structural brief completeness. Does not verify claims or predict marketing performance.",
   production_get: "Get a production and recent revision metadata.",
