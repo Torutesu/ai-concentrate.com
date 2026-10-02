@@ -7,7 +7,13 @@ export async function GET(
   return handle(async () => {
     const { workspaceId } = await c.params;
     return {
-      productions: await (await service(r)).read(idSchema.parse(workspaceId)),
+      ...(await (
+        await service(r)
+      ).page(
+        idSchema.parse(workspaceId),
+        20,
+        new URL(r.url).searchParams.get("cursor") ?? undefined,
+      )),
     };
   });
 }

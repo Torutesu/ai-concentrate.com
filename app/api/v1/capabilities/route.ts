@@ -14,7 +14,7 @@ export async function GET(r: Request) {
         publishing: false,
         rendering: false,
         analytics: false,
-        mcp: false,
+        mcp: true,
       },
     };
   });

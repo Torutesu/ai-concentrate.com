@@ -1,4 +1,5 @@
 "use client";
+import { AgentReview } from "./agent-review";
 import { useState } from "react";
 import {
   CalendarDays,
@@ -120,6 +121,16 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
             {s.notice}
           </div>
         )}
+        {s.nextCursor && !s.loading && (
+          <div className="notice" role="status">
+            {en
+              ? `${s.productions.length} ideas loaded. Older ideas and their calendar events are not shown yet.`
+              : `${s.productions.length}件を読み込み済み。以前の企画とそのカレンダー予定は未表示です。`}{" "}
+            <Action disabled={s.busy} onClick={s.loadMore}>
+              {en ? "Load more" : "さらに読み込む"}
+            </Action>
+          </div>
+        )}
         {s.busy && (
           <div role="status" className="progress-message">
             <span className="spinner" />
@@ -225,9 +236,9 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
                             s.setView("content");
                           }}
                         >
-                          <strong>{p.data.title}</strong>
+                          <strong>{p.title}</strong>
                           <small>
-                            v{p.revision} · {p.data.items.length}{" "}
+                            v{p.revision} · {p.itemCount}{" "}
                             {en ? "items" : "項目"}
                           </small>
                         </button>
@@ -305,25 +316,7 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
             ) : s.view === "analytics" ? (
               <Analytics s={s} />
             ) : (
-              <Panel>
-                <h2>{en ? "AI changes" : "AIの変更案"}</h2>
-                <p className="muted">
-                  {en
-                    ? "Generated revisions require review before they change your content."
-                    : "生成結果は確認後に適用します。原稿を自動で上書きしません。"}
-                </p>
-                <Badge>
-                  {s.changes.length} {en ? "proposals" : "件の変更案"}
-                </Badge>
-                <Action
-                  onClick={() => {
-                    s.setView("content");
-                    s.setTab("review");
-                  }}
-                >
-                  {en ? "Review proposals" : "変更案を確認"}
-                </Action>
-              </Panel>
+              <AgentReview s={s} />
             )}
           </>
         )}

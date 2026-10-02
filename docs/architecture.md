@@ -88,3 +88,11 @@ command replay, locked editing, proposal application and stale revision rejectio
 The AI provider is a test double in those tests; live provider generation has not
 been verified. Browser checks cover workspace creation, source persistence,
 editing/save/reload, calendar dates, and Japanese/English switching.
+
+## 2026-10-02 extension
+
+The stateless `/mcp` endpoint and `/api/v1/operations` now share the operations registry and StudioService. Twelve operations support workspace access, sources, paginated production summaries, brief review, versioned saves/restoration and AI revision proposals. Sites owns external OAuth; `cli/concentrate.mjs` consumes an authorized bearer token. Hosting/plugin provisioning and live OAuth must be checked separately from local tool discovery.
+
+The Web production list now uses keyset pages of 20 lightweight summaries and loads the selected aggregate separately. An explicit load-more control warns that older calendar events are not yet loaded. Source/proposal/history bounds remain as documented above; calendar-wide and full-text search indexing are not implemented. A workspace-create replay returns the stored role/name rather than claiming owner privileges.
+
+Markdown and versioned JSON downloads preserve unsaved text. JSON import validates schema/size and creates a separate production, never overwriting an existing ID. UI language persists locally. HTTP requests time out after 60 seconds. Server and provider tests do not replace browser interaction tests.

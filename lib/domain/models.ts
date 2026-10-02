@@ -167,3 +167,13 @@ export function applyChange(
     ),
   };
 }
+
+export type ProductionSummary = {
+  id: string;
+  workspaceId: string;
+  revision: number;
+  title: string;
+  plannedDate: string;
+  itemCount: number;
+  updatedAt: string;
+};

@@ -1,3 +1,4 @@
+import { marketingBrief, PLAYBOOK_VERSION } from "../agents/marketing";
 import {
   applyChange,
   sourceSchema,
@@ -9,6 +10,7 @@ import {
   validateSave,
   type Production,
   type Change,
+  idSchema,
 } from "../domain/models";
 import { digest, Repository } from "./repository";
 export class StudioService {
@@ -16,6 +18,30 @@ export class StudioService {
     public repository: Repository,
     public actorId: string,
   ) {}
+  async workspaces() {
+    return this.repository.list(this.actorId);
+  }
+  async createWorkspace(id: string, name: string) {
+    idSchema.parse(id);
+    if (!name.trim() || name.length > 120)
+      throw new DomainError("VALIDATION", 400, "Invalid workspace name.");
+    return this.repository.create(this.actorId, name.trim(), id);
+  }
+  async page(workspaceId: string, limit = 20, cursor?: string) {
+    await this.repository.role(workspaceId, this.actorId);
+    return this.repository.pageProductions(workspaceId, limit, cursor);
+  }
+  async restore(
+    workspaceId: string,
+    id: string,
+    revision: number,
+    baseRevision: number,
+    key: string,
+  ) {
+    requireEdit(await this.repository.role(workspaceId, this.actorId));
+    const data = await this.repository.revision(workspaceId, id, revision);
+    return this.save(workspaceId, id, data, baseRevision, key);
+  }
   async sources(workspaceId: string) {
     await this.repository.role(workspaceId, this.actorId);
     return this.repository.sources(workspaceId);
@@ -121,6 +147,10 @@ export class StudioService {
 export type GenerationProvider = {
   revise(input: {
     title: string;
+    kind: import("../domain/models").ContentItem["kind"];
+    playbookVersion: string;
+    brief: ReturnType<typeof marketingBrief>;
+    sourceCoverage: { selected: number; truncated: boolean };
     locale: string;
     body: string;
     instruction: string;
@@ -153,9 +183,18 @@ export async function generateProposal(
   );
   if (replay) return replay;
   try {
-    const sources = (await service.repository.sources(workspaceId)).slice(0, 8);
+    const available = await service.repository.sources(workspaceId);
+    const sources = available.slice(0, 8);
     const after = await provider.revise({
       title: target.production.data.title,
+      kind: target.item.kind,
+      playbookVersion: PLAYBOOK_VERSION,
+      brief: marketingBrief(target.production.data),
+      sourceCoverage: {
+        selected: sources.length,
+        truncated:
+          available.length > 8 || sources.some((s) => s.body.length > 10000),
+      },
       locale: target.item.locale,
       body: target.item.body,
       instruction: input.instruction,

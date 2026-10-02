@@ -57,8 +57,12 @@ export class Repository {
         )
         .bind(id, userId),
     ]);
-    await this.role(id, userId);
-    return { id, name, role: "owner" };
+    const role = await this.role(id, userId);
+    const workspace = await this.db
+      .prepare("SELECT name FROM workspaces WHERE id=?")
+      .bind(id)
+      .first<{ name: string }>();
+    return { id, name: workspace!.name, role };
   }
   async listProductions(workspaceId: string) {
     const rows = await this.db
@@ -148,6 +152,56 @@ export class Repository {
     if (!receipt)
       throw new DomainError("CONFLICT", 409, "A newer revision exists.");
     return receipt;
+  }
+  async pageProductions(workspaceId: string, limit: number, cursor?: string) {
+    let date = "",
+      id = "";
+    if (cursor) {
+      try {
+        const parts = JSON.parse(atob(cursor));
+        if (
+          !Array.isArray(parts) ||
+          parts.length !== 2 ||
+          parts.some((v) => typeof v !== "string")
+        )
+          throw Error();
+        [date, id] = parts;
+      } catch {
+        throw new DomainError("CURSOR", 400, "Invalid cursor.");
+      }
+    }
+    const rows = await this.db
+      .prepare(
+        "SELECT id,revision,updated_at,json_extract(data,'$.title') AS title,json_extract(data,'$.plannedDate') AS plannedDate,json_array_length(data,'$.items') AS itemCount FROM productions WHERE workspace_id=? AND (?='' OR updated_at<? OR (updated_at=? AND id<?)) ORDER BY updated_at DESC,id DESC LIMIT ?",
+      )
+      .bind(workspaceId, date, date, date, id, limit + 1)
+      .all<{
+        id: string;
+        revision: number;
+        updated_at: string;
+        title: string;
+        plannedDate: string;
+        itemCount: number;
+      }>();
+    const items = rows.results.slice(0, limit),
+      last = items.at(-1);
+    return {
+      items: items.map((r) => ({ ...r, workspaceId, updatedAt: r.updated_at })),
+      nextCursor:
+        rows.results.length > limit && last
+          ? btoa(JSON.stringify([last.updated_at, last.id]))
+          : null,
+    };
+  }
+  async revision(workspaceId: string, id: string, revision: number) {
+    const row = await this.db
+      .prepare(
+        "SELECT data FROM revisions WHERE workspace_id=? AND production_id=? AND revision=?",
+      )
+      .bind(workspaceId, id, revision)
+      .first<{ data: string }>();
+    if (!row) throw new DomainError("NOT_FOUND", 404, "Revision not found.");
+    return productionSchema.parse(JSON.parse(row.data));
   }
   async history(workspaceId: string, id: string) {
     return (

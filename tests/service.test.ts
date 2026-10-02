@@ -144,3 +144,151 @@ test("stale proposal does not overwrite a later human edit", async () => {
   await assert.rejects(owner.apply("wa", c.id), { code: "CONFLICT" });
   assert.equal((await repo.get("wa", "stale"))?.data.items[0].body, "Human");
 });
+
+test("marketing generation receives the saved brief and channel without cross-tenant sources", async () => {
+  const data = newProduction("Specific launch");
+  data.persona = "Project managers";
+  data.problem = "Repeatedly explaining context";
+  data.metric = "First useful result";
+  data.items[0].kind = "x";
+  await owner.save("wa", "brief-test", data, 0, "brief-create");
+  await other.addSource("wb", {
+    name: "Private",
+    kind: "markdown",
+    reference: "",
+    body: "Never leak this",
+  });
+  await generateProposal(
+    owner,
+    {
+      async revise(input) {
+        assert.equal(input.kind, "x");
+        assert.equal(input.brief.persona, data.persona);
+        assert.equal(input.brief.metric, data.metric);
+        assert.ok(input.playbookVersion);
+        assert.ok(
+          input.sources.every((s) => !s.body.includes("Never leak this")),
+        );
+        return "Scoped draft";
+      },
+    },
+    "wa",
+    {
+      productionId: "brief-test",
+      itemId: data.items[0].id,
+      baseRevision: 1,
+      instruction: "Improve clarity",
+      idempotencyKey: "brief-generation",
+    },
+  );
+});
+
+test("review exposes missing inputs without claiming factual correctness or predicted reach", async () => {
+  const { executeOperation } = await import("../lib/server/operations");
+  const report = (await executeOperation(owner, "production_review", {
+    workspaceId: "wa",
+    productionId: "brief-test",
+  })) as {
+    missing: string[];
+    readyForEditorialReview: boolean;
+    requiresHumanReview: string[];
+  };
+  assert.ok(report.missing.includes("cta"));
+  assert.equal(report.readyForEditorialReview, false);
+  assert.ok(report.requiresHumanReview.includes("claim-support"));
+  await assert.rejects(
+    executeOperation(other, "production_review", {
+      workspaceId: "wa",
+      productionId: "brief-test",
+    }),
+    { code: "NOT_FOUND" },
+  );
+});
+
+test("restoring a revision creates history and respects concurrent edits", async () => {
+  const p = await owner.save(
+    "wa",
+    "restore-test",
+    newProduction("Original"),
+    0,
+    "restore-create",
+  );
+  await owner.save(
+    "wa",
+    p.id,
+    { ...p.data, title: "Edited" },
+    1,
+    "restore-edit",
+  );
+  const restored = await owner.restore("wa", p.id, 1, 2, "restore-old");
+  assert.equal(restored.revision, 3);
+  assert.equal(restored.data.title, "Original");
+  await assert.rejects(owner.restore("wa", p.id, 2, 2, "restore-stale"), {
+    code: "CONFLICT",
+  });
+});
+
+test("MCP exposes review as read-only and rejects unknown tool arguments", async () => {
+  const { dispatchMcp, toolDefinitions } = await import("../lib/server/mcp");
+  const { executeOperation } = await import("../lib/server/operations");
+  assert.equal(
+    toolDefinitions.find((t) => t.name === "production_review")?.annotations
+      .readOnlyHint,
+    true,
+  );
+  const result = await dispatchMcp(
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "production_review",
+        arguments: {
+          workspaceId: "wa",
+          productionId: "brief-test",
+          bypass: true,
+        },
+      },
+    },
+    (name, input) => executeOperation(owner, name, input),
+  );
+  assert.equal(
+    (result as { result: { isError: boolean } }).result.isError,
+    true,
+  );
+  assert.equal(
+    await dispatchMcp(
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      async () => {
+        throw Error("Must not execute");
+      },
+    ),
+    null,
+  );
+});
+
+test("keyset pages contain only summaries and do not lose entries across page boundaries", async () => {
+  await repo.create("alice", "Pagination", "pages");
+  for (let i = 0; i < 5; i++)
+    await owner.save(
+      "pages",
+      `page-${i}`,
+      newProduction(`Item ${i}`),
+      0,
+      `page-create-${i}`,
+    );
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const page = await owner.page("pages", 2, cursor);
+    for (const item of page.items) {
+      assert.ok(!seen.has(item.id));
+      assert.ok(!("data" in item));
+      seen.add(item.id);
+    }
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  assert.equal(seen.size, 5);
+  await assert.rejects(other.page("pages", 2), { code: "NOT_FOUND" });
+  await assert.rejects(owner.page("pages", 2, "broken"), { code: "CURSOR" });
+});

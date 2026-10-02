@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   Change,
   Production,
+  ProductionSummary,
   Source,
   VersionedProduction,
   Workspace,
@@ -13,7 +14,9 @@ import type { Locale, View, Tab } from "./i18n";
 export function useStudio() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [workspaceId, setWorkspaceId] = useState(""),
-    [productions, setProductions] = useState<VersionedProduction[]>([]),
+    [productions, setProductions] = useState<ProductionSummary[]>([]),
+    [nextCursor, setNextCursor] = useState<string | null>(null),
+    [selected, setSelected] = useState<VersionedProduction | undefined>(),
     [sources, setSources] = useState<Source[]>([]),
     [changes, setChanges] = useState<Change[]>([]),
     [selectedId, setSelectedId] = useState(""),
@@ -27,8 +30,7 @@ export function useStudio() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [caps, setCaps] = useState<Record<string, boolean>>({});
-  const selected = productions.find((p) => p.id === selectedId),
-    workspace = workspaces.find((w) => w.id === workspaceId);
+  const workspace = workspaces.find((w) => w.id === workspaceId);
   const dirty = Boolean(
     draft && selected && json(draft) !== json(selected.data),
   );
@@ -53,6 +55,10 @@ export function useStudio() {
   }, [dirty, busy]);
   const init = useCallback(async () => {
     try {
+      try {
+        const stored = localStorage.getItem("concentrate.locale");
+        if (stored === "en" || stored === "ja") setLocale(stored);
+      } catch {}
       const [w, c] = await Promise.all([
         api<{ workspaces: Workspace[] }>("/workspaces"),
         api<{ capabilities: Record<string, boolean> }>("/capabilities"),
@@ -76,7 +82,7 @@ export function useStudio() {
     if (!workspaceId) return;
     const controller = new AbortController();
     Promise.all([
-      api<{ productions: VersionedProduction[] }>(
+      api<{ items: ProductionSummary[]; nextCursor: string | null }>(
         `/workspaces/${workspaceId}/productions`,
         { signal: controller.signal },
       ),
@@ -87,12 +93,22 @@ export function useStudio() {
         signal: controller.signal,
       }),
     ])
-      .then(([p, s, c]) => {
-        setProductions(p.productions);
+      .then(async ([p, s, c]) => {
+        const first = p.items[0];
+        const detail = first
+          ? await api<{ production: VersionedProduction }>(
+              `/workspaces/${workspaceId}/productions/${first.id}`,
+              { signal: controller.signal },
+            )
+          : null;
+        if (controller.signal.aborted) return;
+        setProductions(p.items);
+        setNextCursor(p.nextCursor);
         setSources(s.sources);
         setChanges(c.changes);
-        setSelectedId(p.productions[0]?.id ?? "");
-        setDraft(p.productions[0]?.data ?? null);
+        setSelectedId(first?.id ?? "");
+        setSelected(detail?.production);
+        setDraft(detail?.production.data ?? null);
       })
       .catch((e) => {
         if (!controller.signal.aborted) setError(message(e));
@@ -118,7 +134,19 @@ export function useStudio() {
     }
   }
   function replace(p: VersionedProduction) {
-    setProductions((ps) => [p, ...ps.filter((x) => x.id !== p.id)]);
+    setProductions((ps) => [
+      {
+        id: p.id,
+        workspaceId: p.workspaceId,
+        revision: p.revision,
+        updatedAt: p.updatedAt,
+        title: p.data.title,
+        plannedDate: p.data.plannedDate,
+        itemCount: p.data.items.length,
+      },
+      ...ps.filter((x) => x.id !== p.id),
+    ]);
+    setSelected(p);
     setSelectedId(p.id);
     setDraft(p.data);
   }
@@ -153,13 +181,15 @@ export function useStudio() {
       setView("context");
     });
   }
-  async function createProduction(example = false) {
+  async function createProduction(example = false, imported?: Production) {
     if (!confirmLeave()) return;
     return run(async () => {
       const id = crypto.randomUUID(),
-        data = example
-          ? shogunExample()
-          : newProduction(locale === "ja" ? "新しい企画" : "New idea");
+        data =
+          imported ??
+          (example
+            ? shogunExample()
+            : newProduction(locale === "ja" ? "新しい企画" : "New idea"));
       const r = await api<{ production: VersionedProduction }>(
         `/workspaces/${workspaceId}/productions/${id}`,
         {
@@ -176,17 +206,38 @@ export function useStudio() {
       setTab("draft");
     });
   }
-  function select(id: string) {
+  async function select(id: string) {
     if (busy || !confirmLeave()) return;
-    const p = productions.find((x) => x.id === id);
-    if (p) {
+    return run(async () => {
+      const r = await api<{ production: VersionedProduction }>(
+        `/workspaces/${workspaceId}/productions/${id}`,
+      );
+      setSelected(r.production);
       setSelectedId(id);
-      setDraft(p.data);
-    }
+      setDraft(r.production.data);
+    });
+  }
+  async function loadMore() {
+    if (!nextCursor || busy) return;
+    return run(async () => {
+      const r = await api<{
+        items: ProductionSummary[];
+        nextCursor: string | null;
+      }>(
+        `/workspaces/${workspaceId}/productions?cursor=${encodeURIComponent(nextCursor)}`,
+      );
+      setProductions((ps) => [
+        ...ps,
+        ...r.items.filter((x) => !ps.some((p) => p.id === x.id)),
+      ]);
+      setNextCursor(r.nextCursor);
+    });
   }
   function switchWorkspace(id: string) {
     if (busy || !confirmLeave()) return;
     setProductions([]);
+    setSelected(undefined);
+    setNextCursor(null);
     setSources([]);
     setChanges([]);
     setDraft(null);
@@ -239,17 +290,55 @@ export function useStudio() {
       setNotice(locale === "ja" ? "変更を適用しました" : "Change applied");
     });
   }
+  async function restore(revision: number) {
+    if (!selected || dirty || busy) return;
+    return run(async () => {
+      const r = await api<{ data: VersionedProduction }>("/operations", {
+        method: "POST",
+        body: json({
+          name: "production_restore",
+          arguments: {
+            workspaceId,
+            productionId: selected.id,
+            revision,
+            baseRevision: selected.revision,
+            idempotencyKey: crypto.randomUUID(),
+          },
+        }),
+      });
+      replace(r.data);
+      setNotice(
+        locale === "ja"
+          ? "新しい版として復元しました"
+          : "Restored as a new revision",
+      );
+    });
+  }
   async function reload() {
     if (!confirmLeave()) return;
+    if (!workspaceId) return init();
     return run(async () => {
-      const r = await api<{ productions: VersionedProduction[] }>(
-        `/workspaces/${workspaceId}/productions`,
-      );
-      setProductions(r.productions);
-      const p =
-        r.productions.find((x) => x.id === selectedId) ?? r.productions[0];
-      setSelectedId(p?.id ?? "");
-      setDraft(p?.data ?? null);
+      const [sourceResult, changeResult] = await Promise.all([
+        api<{ sources: Source[] }>(`/workspaces/${workspaceId}/sources`),
+        api<{ changes: Change[] }>(`/workspaces/${workspaceId}/changes`),
+      ]);
+      setSources(sourceResult.sources);
+      setChanges(changeResult.changes);
+      const r = await api<{
+        items: ProductionSummary[];
+        nextCursor: string | null;
+      }>(`/workspaces/${workspaceId}/productions`);
+      setProductions(r.items);
+      setNextCursor(r.nextCursor);
+      const id = selectedId || r.items[0]?.id;
+      const detail = id
+        ? await api<{ production: VersionedProduction }>(
+            `/workspaces/${workspaceId}/productions/${id}`,
+          )
+        : null;
+      setSelected(detail?.production);
+      setSelectedId(id ?? "");
+      setDraft(detail?.production.data ?? null);
     });
   }
   return {
@@ -257,12 +346,19 @@ export function useStudio() {
     workspaceId,
     workspace,
     productions,
+    nextCursor,
+    loadMore,
     sources,
     changes,
     selected,
     draft,
     locale,
-    setLocale,
+    setLocale: (value: Locale) => {
+      setLocale(value);
+      try {
+        localStorage.setItem("concentrate.locale", value);
+      } catch {}
+    },
     view,
     setView,
     tab,
@@ -285,6 +381,7 @@ export function useStudio() {
     generate,
     apply,
     reload,
+    restore,
     setError,
   };
 }

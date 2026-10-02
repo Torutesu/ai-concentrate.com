@@ -46,3 +46,18 @@ at `89:9207`. Existing exploratory/product-design nodes are preserved.
 Every subsequent UI change must update the implementation sync map and applicable
 native Figma screens; do not mark all planned designs as shipped. Automatic
 background or bidirectional sync is still not installed.
+
+## 2026-10-02 — marketing-agent research integration (local, not deployed)
+
+Reviewed Okara's viral-launch handbook. Added versioned editorial/channel policies and connected saved persona/problem/claim/hypothesis/CTA/destination/metric/review-date fields to the real provider request. Added structural `production_review` through shared operations/MCP, with tenant authorization and explicit unverified-evidence status. See `docs/marketing-agent-quality.md` for research provenance and live-evaluation limits.
+
+Local common operations/MCP/CLI and history-restore work is also present. Ten integration tests and production build pass. Hosted MCP OAuth, real provider quality, and deployment are not verified for this change. No UI nodes changed in this increment; previous full-screen Figma parity remains outstanding and is not claimed complete. Do not present this local increment as a deployed or fully completed product.
+
+## 2026-10-02 — review and history UI (local)
+Agent screen now displays selected draft readiness, missing fields, source count and human review criteria using the shared marketing policy. History offers revision restoration via shared operations, with dirty/role/busy guards and confirmation. Locked persisted bodies stay disabled until unlock has been saved.
+Figma agent node 89:10254 updated in place; history node 98:8656 added. Native editable layers; explorations preserved. TypeScript, 10 integration tests and build passed; lint has only existing image warnings. Not deployed; browser interaction verification and full planned-screen parity remain outstanding.
+
+## 2026-10-02 — complete implemented-view inventory and release preparation
+
+The implementation-sync area now covers 29 editable native views/states. See `complete-view-state.json` and main ledger for added IDs. Existing design explorations remain untouched. The authoring script records creation; do not blindly rerun it to overwrite designer changes.
+Added inline brief fields, JSON import/export, Markdown export, language persistence, timed requests, summary pagination/lazy detail retrieval, explicit unloaded-calendar notice and application-level restore confirmation. MCP exposes 12 shared operations. `docs/release-readiness.md` explicitly separates delivered features, setup dependencies and still-unimplemented commercial/video modules. Never claim those planned modules are shipped.

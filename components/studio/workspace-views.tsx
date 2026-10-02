@@ -331,7 +331,7 @@ export function Calendar({ s }: { s: StudioController }) {
                       (p) =>
                         (p.id === s.selected?.id
                           ? s.draft?.plannedDate
-                          : p.data.plannedDate) === date,
+                          : p.plannedDate) === date,
                     )
                     .map((p) => (
                       <button
@@ -342,7 +342,7 @@ export function Calendar({ s }: { s: StudioController }) {
                           s.select(p.id);
                         }}
                       >
-                        {p.data.title}
+                        {p.title}
                       </button>
                     ))}
                 </div>
@@ -418,10 +418,10 @@ export function Integrations({ s }: { s: StudioController }) {
     ],
     [
       "MCP / CLI",
-      false,
+      s.caps.mcp,
       en
-        ? "Shared application service is ready; external authentication and transports are pending."
-        : "共通サービスを用意。外部認証と接続口は未実装。",
+        ? "Shared operations endpoint available. Connect the Site plugin with OAuth; CLI requires an authorized token."
+        : "共通操作の接続口を用意。SiteプラグインのOAuth接続、CLIは認可済みトークンが必要です。",
     ],
   ] as const;
   return (
@@ -522,7 +522,7 @@ function IdeaPicker({ s }: { s: StudioController }) {
       >
         {s.productions.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.data.title}
+            {p.title}
           </option>
         ))}
       </select>
