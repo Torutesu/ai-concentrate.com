@@ -42,3 +42,11 @@ Observed old preview: server-rendered identity but API requests required re-logi
 Root ClerkProvider now maintains session refresh across workspace pages; sign-in
 uses this shared provider. Hosted build passed; final authenticated browser check
 and live generation remain pending because Dia was actively switched to another task.
+
+## UI polish — 2026-10-03
+Preview: https://ai-concentrate-jqtbq8os5-torutesus-projects.vercel.app
+- Redesigned operational home, grouped export controls, document/AI composition areas and editable idea title.
+- Shared panel/control refinements and fixes for narrow-screen navigation and visually hidden upload-input overflow.
+- 32 domain tests pass; Next build and deployed Vercel build pass. Targeted lint: 0 errors, 4 existing image warnings.
+- Browser checks on isolated local fixtures: home-to-editor navigation; title change enables save; EN switch; 390px home, plan, draft and six primary views without page-level overflow; export Escape dismissal. This is UI evidence, not hosted auth/provider validation.
+- Figma implementation frames updated; source hashes and native node IDs recorded. Visual review covers home/editor; dedicated mobile/EN Figma parity is still incomplete.

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import { Download, Plus, Sparkles, FileText } from "lucide-react";
 import { productionSchema, type ContentItem } from "../../lib/domain/models";
 import { productionMarkdown } from "../../lib/domain/export";
 import { History } from "./history";
@@ -28,6 +29,28 @@ export function Editor({ s }: { s: StudioController }) {
     [instruction, setInstruction] = useState(""),
     [aspect, setAspect] = useState("16:9"),
     [preview, setPreview] = useState(false);
+  const exportMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        exportMenu.current &&
+        !exportMenu.current.contains(event.target as Node)
+      )
+        exportMenu.current.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && exportMenu.current?.open) {
+        exportMenu.current.open = false;
+        exportMenu.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
   const p = s.draft,
     canEdit = s.workspace?.role !== "viewer" && !s.busy;
   const kinds: Partial<Record<Tab, ContentItem["kind"]>> = {
@@ -52,6 +75,7 @@ export function Editor({ s }: { s: StudioController }) {
   }
   function download(format: "json" | "md") {
     if (!p) return;
+    if (exportMenu.current) exportMenu.current.open = false;
     const content =
       format === "json"
         ? JSON.stringify({ schemaVersion: 1, production: p }, null, 2)
@@ -92,52 +116,55 @@ export function Editor({ s }: { s: StudioController }) {
     <>
       <div className="page-heading">
         <h1>{t.content}</h1>
-        <Action
-          primary
-          disabled={!canEdit}
-          onClick={() => s.createProduction()}
-        >
-          {t.new}
-        </Action>
-        <label className="btn">
-          <span>{en ? "Import JSON" : "JSONを読み込む"}</span>
-          <input
-            type="file"
-            accept="application/json,.json"
+        <div className="actions">
+          <Action
+            primary
             disabled={!canEdit}
-            className="sr-only"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              try {
-                if (file.size > 300000)
-                  throw Error(
-                    en
-                      ? "File exceeds 300 KB"
-                      : "300KB以下のファイルを選んでください",
+            onClick={() => s.createProduction()}
+          >
+            <Plus size={16} />
+            {t.new}
+          </Action>
+          <label className="btn">
+            <span>{en ? "Import JSON" : "JSONを読み込む"}</span>
+            <input
+              type="file"
+              accept="application/json,.json"
+              disabled={!canEdit}
+              className="sr-only"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                try {
+                  if (file.size > 300000)
+                    throw Error(
+                      en
+                        ? "File exceeds 300 KB"
+                        : "300KB以下のファイルを選んでください",
+                    );
+                  const data = JSON.parse(await file.text());
+                  if (data.schemaVersion !== 1)
+                    throw Error(
+                      en
+                        ? "Unsupported backup version"
+                        : "対応していないバックアップ形式です",
+                    );
+                  await s.createProduction(
+                    false,
+                    productionSchema.parse(data.production),
                   );
-                const data = JSON.parse(await file.text());
-                if (data.schemaVersion !== 1)
-                  throw Error(
+                } catch {
+                  s.setError(
                     en
-                      ? "Unsupported backup version"
-                      : "対応していないバックアップ形式です",
+                      ? "Could not import. Use a valid Concentrate JSON backup under 300 KB."
+                      : "読み込めませんでした。300KB以下のConcentrate JSONバックアップを選んでください。",
                   );
-                await s.createProduction(
-                  false,
-                  productionSchema.parse(data.production),
-                );
-              } catch {
-                s.setError(
-                  en
-                    ? "Could not import. Use a valid Concentrate JSON backup under 300 KB."
-                    : "読み込めませんでした。300KB以下のConcentrate JSONバックアップを選んでください。",
-                );
-              }
-            }}
-          />
-        </label>
+                }
+              }}
+            />
+          </label>
+        </div>
       </div>
       <nav className="tabs" aria-label={en ? "Content format" : "制作形式"}>
         {tabs.map((tab) => (
@@ -161,19 +188,26 @@ export function Editor({ s }: { s: StudioController }) {
         </Empty>
       ) : (
         <>
-          <div className="identity">
+          <div className="identity editor-toolbar">
             <div>
               <h2>{p.title}</h2>
               <span className="muted">
-                {s.selected?.id.slice(0, 8)} / v{s.selected?.revision} ·{" "}
-                {s.dirty ? t.unsaved : t.saved}
+                v{s.selected?.revision} · {s.dirty ? t.unsaved : t.saved}
               </span>
             </div>
             <div className="actions">
-              <Action onClick={() => download("md")}>Markdown</Action>
-              <Action onClick={() => download("json")}>
-                {en ? "Backup JSON" : "JSONを保存"}
-              </Action>
+              <details className="export-menu" ref={exportMenu}>
+                <summary className="btn">
+                  <Download size={15} />
+                  {en ? "Export" : "書き出す"}
+                </summary>
+                <div className="export-options">
+                  <Action onClick={() => download("md")}>Markdown</Action>
+                  <Action onClick={() => download("json")}>
+                    {en ? "JSON backup" : "JSONバックアップ"}
+                  </Action>
+                </div>
+              </details>
               <label className="compact-select">
                 {en ? "Output language" : "制作言語"}
                 <select
@@ -194,6 +228,12 @@ export function Editor({ s }: { s: StudioController }) {
           {s.tab === "plan" ? (
             <fieldset disabled={!canEdit} className="split">
               <Panel>
+                <h2>{en ? "Idea brief" : "企画のブリーフ"}</h2>
+                <Field
+                  label={en ? "Idea title" : "企画名"}
+                  value={p.title}
+                  onChange={(e) => s.patch({ title: e.target.value })}
+                />
                 <Field
                   label={en ? "Audience" : "対象"}
                   value={p.persona}
@@ -386,7 +426,11 @@ export function Editor({ s }: { s: StudioController }) {
                   </Panel>
                 </div>
               )}
-              <Panel>
+              <Panel className="writing-panel">
+                <div className="section-label">
+                  <FileText size={16} />
+                  {t[s.tab]}
+                </div>
                 {items.length > 1 && s.tab !== "video" && (
                   <label className="field">
                     <span>{en ? "Item" : "項目"}</span>
@@ -428,29 +472,31 @@ export function Editor({ s }: { s: StudioController }) {
                         alt="ShogunAI reference, 2026-09-06"
                       />
                     )}
-                    <Field
-                      label={
-                        s.tab === "video"
-                          ? en
-                            ? "Script"
-                            : "台本"
-                          : en
-                            ? "Text"
-                            : "本文"
-                      }
-                      multiline
-                      value={selected.body}
-                      disabled={
-                        !canEdit ||
-                        selected.locked ||
-                        Boolean(
-                          s.selected?.data.items.find(
-                            (i) => i.id === selected.id,
-                          )?.locked,
-                        )
-                      }
-                      onChange={(e) => updateItem({ body: e.target.value })}
-                    />
+                    <div className="document-body">
+                      <Field
+                        label={
+                          s.tab === "video"
+                            ? en
+                              ? "Script"
+                              : "台本"
+                            : en
+                              ? "Text"
+                              : "本文"
+                        }
+                        multiline
+                        value={selected.body}
+                        disabled={
+                          !canEdit ||
+                          selected.locked ||
+                          Boolean(
+                            s.selected?.data.items.find(
+                              (i) => i.id === selected.id,
+                            )?.locked,
+                          )
+                        }
+                        onChange={(e) => updateItem({ body: e.target.value })}
+                      />
+                    </div>
                     <div className="actions">
                       <Badge>
                         {selected.locale} / {selected.kind}
@@ -471,39 +517,49 @@ export function Editor({ s }: { s: StudioController }) {
                             : "ロック解除を保存すると本文を編集できます。"}
                         </small>
                       )}
-                    <hr />
-                    <Field
-                      label={en ? "AI instruction" : "AIへの指示"}
-                      multiline
-                      value={instruction}
-                      onChange={(e) => setInstruction(e.target.value)}
-                    />
-                    <Action
-                      primary
-                      disabled={
-                        !canEdit ||
-                        s.dirty ||
-                        !s.caps.ai ||
-                        selected.locked ||
-                        !instruction.trim()
-                      }
-                      onClick={() => s.generate(selected.id, instruction)}
-                    >
-                      {s.busy ? (en ? "Generating…" : "生成中…") : t.generate}
-                    </Action>
-                    <small className="muted">
-                      {s.dirty
-                        ? en
-                          ? "Save before generating."
-                          : "保存してから変更案を生成できます。"
-                        : !s.caps.ai
+                    <div className="ai-composer">
+                      <div className="section-label">
+                        <Sparkles size={16} />
+                        {en ? "Refine with AI" : "AIと磨く"}
+                      </div>
+                      <Field
+                        label={en ? "AI instruction" : "AIへの指示"}
+                        multiline
+                        placeholder={
+                          en
+                            ? "e.g. Shorten the opening and make the audience clear"
+                            : "例：冒頭を短くして、誰に向けた内容か明確に"
+                        }
+                        value={instruction}
+                        onChange={(e) => setInstruction(e.target.value)}
+                      />
+                      <Action
+                        primary
+                        disabled={
+                          !canEdit ||
+                          s.dirty ||
+                          !s.caps.ai ||
+                          selected.locked ||
+                          !instruction.trim()
+                        }
+                        onClick={() => s.generate(selected.id, instruction)}
+                      >
+                        {s.busy ? (en ? "Generating…" : "生成中…") : t.generate}
+                      </Action>
+                      <small className="muted">
+                        {s.dirty
                           ? en
-                            ? "AI provider configuration required."
-                            : "AI生成はサーバー設定待ちです。"
-                          : en
-                            ? "Sources from this workspace are sent to the AI provider."
-                            : "このワークスペースの資料をAIに渡し、変更案を作成します。"}
-                    </small>
+                            ? "Save before generating."
+                            : "保存してから変更案を生成できます。"
+                          : !s.caps.ai
+                            ? en
+                              ? "AI provider configuration required."
+                              : "AI生成はサーバー設定待ちです。"
+                            : en
+                              ? "Sources from this workspace are sent to the AI provider."
+                              : "このワークスペースの資料をAIに渡し、変更案を作成します。"}
+                      </small>
+                    </div>
                   </>
                 )}
               </Panel>

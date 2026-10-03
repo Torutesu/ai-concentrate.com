@@ -6,7 +6,6 @@ import {
   ChartNoAxesCombined,
   FileText,
   House,
-  Layers,
   Plug,
   Settings,
   Target,
@@ -15,8 +14,9 @@ import {
 } from "lucide-react";
 import { useStudio } from "./use-studio";
 import { labels, type View } from "./i18n";
-import { Action, Panel, Badge } from "./ui";
+import { Action, Panel } from "./ui";
 import { Editor } from "./editor";
+import { Home } from "./home";
 import {
   Context,
   Strategy,
@@ -69,9 +69,10 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
           </select>
         </label>
         <nav aria-label={en ? "Main navigation" : "メインナビゲーション"}>
-          {nav.map(([v, Icon]) => (
+          {nav.map(([v, Icon], index) => (
             <button
               key={v}
+              className={index === 6 ? "nav-workspace-start" : undefined}
               onClick={() => s.setView(v as View)}
               aria-current={s.view === v ? "page" : undefined}
             >
@@ -106,7 +107,10 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
             {s.workspace?.name ?? "AI Concentrate"}{" "}
             <span className="separator">/</span> {t[s.view]}
           </span>
-          <Badge>{s.dirty ? t.unsaved : t.saved}</Badge>
+          <span className={`save-status ${s.dirty ? "is-dirty" : ""}`}>
+            <span className="status-dot" />
+            {s.busy ? t.saving : s.dirty ? t.unsaved : t.saved}
+          </span>
         </div>
         {s.error && (
           <div className="alert" role="alert">
@@ -179,7 +183,9 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
           <Editor s={s} />
         ) : (
           <>
-            <div className="page-heading">
+            <div
+              className={`page-heading ${s.view === "home" ? "home-page-heading" : ""}`}
+            >
               <h1>{t[s.view]}</h1>
               {["strategy", "analytics", "calendar"].includes(s.view) && (
                 <Action
@@ -194,115 +200,7 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
               )}
             </div>
             {s.view === "home" ? (
-              <>
-                <div className="home-intro">
-                  <div>
-                    <Badge>
-                      {en ? "Your workspace" : "制作ワークスペース"}
-                    </Badge>
-                    <h2>
-                      {en
-                        ? "Turn the next idea into a draft."
-                        : "次の企画を、形に。"}
-                    </h2>
-                    <p className="muted">
-                      {s.productions.length} {en ? "ideas" : "件の企画"} ·{" "}
-                      {s.sources.length} {en ? "sources" : "件の資料"}
-                    </p>
-                  </div>
-                  <Action
-                    primary
-                    disabled={s.busy || s.workspace?.role === "viewer"}
-                    onClick={() => s.createProduction()}
-                  >
-                    {t.new}
-                  </Action>
-                </div>
-                <div className="two-col">
-                  <Panel>
-                    <div className="identity">
-                      <h2>{en ? "Continue working" : "制作を続ける"}</h2>
-                      <Action onClick={() => s.setView("content")}>
-                        {en ? "View all" : "一覧を見る"}
-                      </Action>
-                    </div>
-                    {s.productions.length ? (
-                      s.productions.slice(0, 5).map((p) => (
-                        <button
-                          className="list-item"
-                          key={p.id}
-                          onClick={() => {
-                            s.select(p.id);
-                            s.setView("content");
-                          }}
-                        >
-                          <strong>{p.title}</strong>
-                          <small>
-                            v{p.revision} · {p.itemCount}{" "}
-                            {en ? "items" : "項目"}
-                          </small>
-                        </button>
-                      ))
-                    ) : (
-                      <div className="empty-inner">
-                        <Layers size={32} />
-                        <p>
-                          {en
-                            ? "Start with an idea or explore the example."
-                            : "企画を作るか、サンプルから試せます。"}
-                        </p>
-                        <Action
-                          onClick={() => s.createProduction(true)}
-                          disabled={s.busy || s.workspace?.role === "viewer"}
-                        >
-                          ShogunAI {en ? "example" : "サンプル"}
-                        </Action>
-                      </div>
-                    )}
-                  </Panel>
-                  <Panel>
-                    <h2>{en ? "Workspace setup" : "制作の準備"}</h2>
-                    <button
-                      className="list-item"
-                      onClick={() => s.setView("context")}
-                    >
-                      <strong>{t.context}</strong>
-                      <small>
-                        {s.sources.length}{" "}
-                        {en ? "sources saved" : "件の資料を保存済み"} →
-                      </small>
-                    </button>
-                    <button
-                      className="list-item"
-                      onClick={() => s.setView("integrations")}
-                    >
-                      <strong>{t.integrations}</strong>
-                      <small>
-                        {s.caps.ai
-                          ? en
-                            ? "AI configured"
-                            : "AI設定済み"
-                          : en
-                            ? "AI configuration pending"
-                            : "AI設定待ち"}{" "}
-                        →
-                      </small>
-                    </button>
-                    <button
-                      className="list-item"
-                      onClick={() => s.setView("calendar")}
-                    >
-                      <strong>{t.calendar}</strong>
-                      <small>
-                        {en
-                          ? "Plan publication dates"
-                          : "制作物の公開予定を整理"}{" "}
-                        →
-                      </small>
-                    </button>
-                  </Panel>
-                </div>
-              </>
+              <Home s={s} />
             ) : s.view === "context" ? (
               <Context s={s} />
             ) : s.view === "strategy" ? (

@@ -926,8 +926,8 @@
   ],
   "synchronizationMode": "agent-required-per-ui-change; no background watcher; no automatic bidirectional sync",
   "implementation": {
-    "date": "2026-10-02",
-    "status": "working-studio-search-revision-preview",
+    "date": "2026-10-03",
+    "status": "workspace-and-editor-polish",
     "pageId": "20:391",
     "screenIds": {
       "home": "89:9207",
@@ -971,12 +971,12 @@
     "verification": "29 editable implementation views/states. Search fields, history rows and saved-revision modal updated in place; no raster UI; Noto Sans JP verified. 13 Miniflare tests pass. Desktop browser confirms Japanese body search, empty result and saved-revision preview. AI/provider and full mobile/English parity remain unverified.",
     "sourceHashes": {
       "app/page.tsx": "3800f43d97022557949831b2e59e3bcc2cabbe8211716481b1594c04c892f469",
-      "app/globals.css": "5b33a32903c38969e0e3e893b7eb0798b04bfa431c09be3bbc0faa310ba8bcea",
+      "app/globals.css": "9c11a41e1e7e902d600818674f95623b8debf1bdbf990a98a1f53203ef2b7a7a",
       "components/studio/use-studio.ts": "ca15a5fbc154d262e669f6a6e03a80dc452519bc3967066b3c042832d1da376c",
       "components/studio/workspace-views.tsx": "464e8a11e2e598b17121e698f9925897e2b28211713e240ae9af8f5b05aba533",
       "components/studio/i18n.ts": "3e79dcc35921cfe41e7abf623d5eaacd2a0fb0d8a43143ba72075b89a39424b0",
-      "components/studio/studio.tsx": "07d5eabe8d10fc8ae03dde2ceb28d251e06a6322fe056bb2d167c0a684f06731",
-      "components/studio/editor.tsx": "0c2539824339e0aa75a1f63e53143bce9cb137dc4eb0185ff8612b8848a2a4df",
+      "components/studio/studio.tsx": "38558cf0223512cb66c85b56653fbbd7dfb2f054db1cbefab6d2d4f6b5285680",
+      "components/studio/editor.tsx": "b033af2ffef8b44033bd33060b136a9c3a23a27fe2938644009c3840357da365",
       "components/studio/ui.tsx": "c249c0165794ffb0c7fbcdb31e5780d823411eaa017ef72fada2808436120969",
       "components/studio/agent-review.tsx": "dffe6d621bbea8eef1dd02b96d00b28473460cfc666a0c1f79a57ee0560ae641",
       "lib/agents/marketing.ts": "da40f52a9d6cd966fb76f36da4f24e41b71f2f6da63a53ecc67dd3b762ba49a4",
@@ -985,15 +985,45 @@
       "components/studio/production-search.tsx": "fb65ec4c7b7d4b5d2767e7494824654c25a68011cc5f8a5825ed4aa3e627ff1b",
       "app/sign-in/[[...sign-in]]/page.tsx": "daaa9324fbec8363060d21537ed017640a841ff11a0ee7fc6a690896c8b4699b",
       "lib/platform/runtime.ts": "79847d2c1ec9c30354adabcaa0f6af7ee966b6c4fed1588bd6959015e3dc21f4",
-      "app/layout.tsx": "0ce24e3eca03870961e1f0e0ae629754786e9e50ac152235fa0283039534f8ce"
+      "app/layout.tsx": "0ce24e3eca03870961e1f0e0ae629754786e9e50ac152235fa0283039534f8ce",
+      "components/studio/home.tsx": "7b0296dfe6a89e1a235d520997a53bb3af4d6c455aff80d31478b23537617e8f"
     },
     "lastChange": {
       "screens": [
+        "89:9207",
+        "89:9304",
+        "89:9427",
+        "89:9548",
+        "89:9676",
+        "89:9779",
+        "89:9951",
+        "89:10058",
+        "89:10156",
+        "89:10254",
+        "98:8656",
+        "103:8714",
+        "103:8853",
+        "103:8992",
+        "103:9131",
+        "103:9270",
+        "103:9413",
+        "103:9529",
+        "103:9643",
+        "103:9754",
+        "103:9874",
+        "103:9990",
+        "103:10104",
+        "103:10220",
+        "103:10332",
+        "103:10444",
+        "103:10562",
+        "103:10674",
+        "103:10789",
         "118:10099",
         "118:10110",
         "123:379"
       ],
-      "validation": "Existing auth root IDs preserved; new connected form native/editable. Designer explorations unchanged. Screenshot review passed; provider styling representative."
+      "validation": "Home/editor screenshots reviewed; 8 main layouts within root bounds; native text and component instances retained. Shared controls updated across 32 implementation frames; exploratory designs unchanged. Browser checks use isolated local fixtures, not hosted AI data. Mobile EN layout tested in browser; dedicated mobile/EN Figma variants are not part of this sync."
     },
     "vercelAuth": {
       "entry": "118:10099",
@@ -1008,6 +1038,24 @@
       "change": "Moved Clerk session provider to root for token refresh on workspace pages; no visual markup, components, tokens or screen changes. Generation admission and safe provider errors added server-side.",
       "figmaMutationRequired": false,
       "verification": "Existing editable auth nodes preserved; no new visual parity claim."
+    },
+    "polish": {
+      "date": "2026-10-03",
+      "ledger": "polish-2026-10-03.json",
+      "sharedScreenCount": 32,
+      "buttons": {
+        "primary": "128:10106",
+        "secondary": "128:10108"
+      },
+      "fields": {
+        "document": "133:10454",
+        "ai": "133:10473"
+      },
+      "tokens": {
+        "radiusPanel": "VariableID:135:10590",
+        "radiusControl": "VariableID:135:10591"
+      },
+      "validation": "Home/editor screenshots reviewed; 8 main layouts within root bounds; native text and component instances retained. Shared controls updated across 32 implementation frames; exploratory designs unchanged. Browser checks use isolated local fixtures, not hosted AI data. Mobile EN layout tested in browser; dedicated mobile/EN Figma variants are not part of this sync."
     }
   }
 }

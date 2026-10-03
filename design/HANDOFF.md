@@ -81,3 +81,8 @@ not pixel-identical. No screenshot is embedded as UI. API key setup remains pend
 
 ## 2026-10-03 runtime-only hardening
 Clerk session provider moved from sign-in wrapper to root to maintain session tokens during editing. Visual markup/components/tokens unchanged; existing editable Figma auth screens retained. Server admission/error handling has no new screen. Source fingerprints updated; no fresh visual parity claim.
+
+## 2026-10-03 — Workspace and editor polish
+Home now prioritizes resuming work, recent ideas and setup with actual loaded counts. Shared panels use 12px corners, controls 8px; glass is restricted to secondary buttons. Sidebar grouping, save status, typography and responsive constraints are consistent across views. The editor separates document text from AI instructions, groups exports in a dismissible menu and exposes the idea title in the brief.
+Existing implementation IDs preserved. 32 frames receive shared component updates; home and six media editors plus brief updated as native editable layers. Button clones are implementation-only so designer explorations keep their original controls. Prior home children remain hidden for recoverability. Exact created/changed IDs are in polish-2026-10-03.json; do not blindly rerun creation scripts.
+Visual checks: home and editor; bounds: eight affected principal layouts. Browser: 1440px desktop, 390px English home/plan/draft and six primary views; corrected sidebar intrinsic-width and hidden-file-input overflow. Dedicated mobile/English Figma screen variants and third-party auth styling parity remain incomplete.
