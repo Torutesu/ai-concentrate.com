@@ -1063,6 +1063,18 @@
         "radiusControl": "VariableID:135:10591"
       },
       "validation": "Home/editor screenshots reviewed; 8 main layouts within root bounds; native text and component instances retained. Shared controls updated across 32 implementation frames; exploratory designs unchanged. Browser checks use isolated local fixtures, not hosted AI data. Mobile EN layout tested in browser; dedicated mobile/EN Figma variants are not part of this sync."
+    },
+    "dataLayerUpdate": {
+      "date": "2026-10-03",
+      "change": "Non-visual data-layer changes only: source list loads summaries and fetches full text when a source is opened (same <pre> content once loaded); a proposal's apply button is disabled when its target text changed (same disabled state and message as before, now per item instead of per production revision); applied proposals leave the local list; a pre-existing TypeScript error in source-draft defaults was fixed. No markup, components, tokens or styles changed.",
+      "figmaMutationRequired": false,
+      "figmaSync": "not performed: the Figma connector was not authorized in this session; no visual change requires it",
+      "sourceHashes": {
+        "components/studio/use-studio.ts": "0887a1e67e1f3dc740d39151e63d4ecf59c35b5a08ec4ecd31186cae28cf345f",
+        "components/studio/editor.tsx": "50e6ee4cb17f33f07e19d7d6e944d6b0d119d8c1c6bc6501e0091ca4f5fc8dc8",
+        "components/studio/workspace-views.tsx": "a0b3bc30c80be99182815f57b21b25312c6bec50fcf72ff126a537ddb30cdcc5"
+      },
+      "verification": "tsc, lint (0 errors), 15 unit + 36x2 D1/libSQL tests, Next and Sites builds pass. No browser check of the changed interactions in this task."
     }
   },
   "workspaceSwitcher": {

@@ -1,0 +1,42 @@
+{
+  "id": "japanese-x",
+  "description": "Japanese X copy within length with one CTA.",
+  "production": {
+    "title": "月曜の朝",
+    "persona": "複数案件を持つフリーランス",
+    "problem": "仕事を再開するとき、前回の判断を探し直す。",
+    "claim": "前回の判断から仕事を再開する",
+    "hypothesis": "",
+    "cta": "ShogunAIを試す",
+    "destination": "https://shogunaios.com/ja",
+    "metric": "流入 → 初回の価値体験",
+    "evaluationDate": "",
+    "plannedDate": "",
+    "decision": "",
+    "items": [
+      {
+        "id": "x-ja",
+        "kind": "x",
+        "locale": "ja",
+        "title": "X",
+        "body": "月曜の朝、最初にやる仕事が「先週の仕事を思い出すこと」になっていませんか。",
+        "locked": false
+      }
+    ]
+  },
+  "itemId": "x-ja",
+  "instruction": "CTAを1つ入れて、140字以内に整えて。",
+  "sources": [
+    {
+      "id": "product",
+      "body": "ShogunAIは仕事の記憶を保存し、出典つきで文脈を検索できる。次の作業の準備を手伝う。料金は未公開。"
+    }
+  ],
+  "expect": {
+    "locale": "ja",
+    "maxChars": 140,
+    "mustContainAny": [
+      "ShogunAI"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "site-creator-vinext-starter",
+  "name": "ai-concentrate",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -14,9 +14,13 @@
     "db:generate": "drizzle-kit generate",
     "test": "node scripts/test.mjs",
     "build:vercel": "next build",
-    "dev:vercel": "next dev --port 3000"
+    "dev:vercel": "next dev --port 3000",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:libsql": "node scripts/migrate-libsql.mjs",
+    "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@base-ui/react": "^1.7.0",
     "@clerk/nextjs": "^7.9.10",
     "@hookform/resolvers": "^5.7.1",

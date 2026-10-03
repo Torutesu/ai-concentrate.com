@@ -144,12 +144,18 @@ export function Context({ s }: { s: StudioController }) {
         </div>
         {s.sources.length ? (
           s.sources.map((source) => (
-            <details key={source.id} className="source-detail">
+            <details
+              key={source.id}
+              className="source-detail"
+              onToggle={(e) => {
+                if (e.currentTarget.open) void s.loadSource(source.id);
+              }}
+            >
               <summary>
                 {source.name} <Badge>{source.kind}</Badge>
               </summary>
               <p className="muted">{source.reference}</p>
-              <pre>{source.body}</pre>
+              <pre>{source.body ?? source.preview}</pre>
               <small>
                 {new Date(source.createdAt).toLocaleString(s.locale)}
               </small>
@@ -410,7 +416,13 @@ export function Calendar({ s }: { s: StudioController }) {
           )}
         </div>
       </Panel>
-      {s.nextCursor && <Action disabled={s.busy} onClick={s.loadMore}>{en ? "Load more ideas into calendar" : "カレンダーに表示する企画をさらに読み込む"}</Action>}
+      {s.nextCursor && (
+        <Action disabled={s.busy} onClick={s.loadMore}>
+          {en
+            ? "Load more ideas into calendar"
+            : "カレンダーに表示する企画をさらに読み込む"}
+        </Action>
+      )}
       <Panel>
         <h2>{day || (en ? "Plan a publication date" : "公開予定を決める")}</h2>
         {!s.draft ? <NoIdea s={s} /> : <IdeaPicker s={s} />}

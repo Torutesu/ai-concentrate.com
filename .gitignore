@@ -46,3 +46,10 @@ next-env.d.ts
 /work/
 
 /.next-vercel/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Eval runs (attach to PRs that change prompts or models)
+/evals/results/
+/.eval-*/

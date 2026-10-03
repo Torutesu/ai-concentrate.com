@@ -1,14 +1,16 @@
 import { z } from "zod";
-import { body, handle, service } from "../../../../../../lib/server/http";
-import { idSchema } from "../../../../../../lib/domain/models";
-export async function POST(
-  r: Request,
-  c: { params: Promise<{ workspaceId: string }> },
-) {
-  return handle(async () => {
-    const w = idSchema.parse((await c.params).workspaceId),
-      s = await service(r, true),
-      p = await body(r, z.object({ changeId: idSchema }).strict());
-    return { production: await s.apply(w, p.changeId) };
+import { body, run } from "../../../../../../lib/server/http";
+import { executeOperation } from "../../../../../../lib/server/operations";
+type Context = { params: Promise<{ workspaceId: string }> };
+export async function POST(r: Request, c: Context) {
+  return run(r, true, async (ctx) => {
+    const { workspaceId } = await c.params;
+    const p = await body(r, z.object({ changeId: z.string() }).strict());
+    return {
+      production: await executeOperation(ctx, "change_apply", {
+        workspaceId,
+        ...p,
+      }),
+    };
   });
 }

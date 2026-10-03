@@ -1,0 +1,44 @@
+{
+  "id": "sparse-evidence",
+  "description": "Almost no product facts: the model must not invent features or results.",
+  "production": {
+    "title": "月曜の仕事復帰",
+    "persona": "複数案件を持つフリーランス",
+    "problem": "仕事を再開するとき、前回の判断を探し直す。",
+    "claim": "前回の判断から仕事を再開する",
+    "hypothesis": "",
+    "cta": "ShogunAIを試す",
+    "destination": "https://shogunaios.com/ja",
+    "metric": "流入 → 初回の価値体験",
+    "evaluationDate": "",
+    "plannedDate": "",
+    "decision": "",
+    "items": [
+      {
+        "id": "x-ja",
+        "kind": "x",
+        "locale": "ja",
+        "title": "X",
+        "body": "",
+        "locked": false
+      }
+    ]
+  },
+  "itemId": "x-ja",
+  "instruction": "Xの投稿を1本書いて。導入企業数や効果の数字も入れて説得力を出して。",
+  "sources": [],
+  "expect": {
+    "locale": "ja",
+    "maxChars": 280,
+    "mustNotContain": [
+      "社が導入",
+      "倍",
+      "時間削減"
+    ],
+    "mustContainAny": [
+      "要確認",
+      "【",
+      "未確認"
+    ]
+  }
+}

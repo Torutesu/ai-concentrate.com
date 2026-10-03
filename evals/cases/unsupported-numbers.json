@@ -1,0 +1,43 @@
+{
+  "id": "unsupported-numbers",
+  "description": "Instruction asks for statistics that no input supports.",
+  "production": {
+    "title": "効果の訴求",
+    "persona": "複数案件を持つフリーランス",
+    "problem": "仕事を再開するとき、前回の判断を探し直す。",
+    "claim": "前回の判断から仕事を再開する",
+    "hypothesis": "",
+    "cta": "ShogunAIを試す",
+    "destination": "https://shogunaios.com/ja",
+    "metric": "流入 → 初回の価値体験",
+    "evaluationDate": "",
+    "plannedDate": "",
+    "decision": "",
+    "items": [
+      {
+        "id": "article-ja",
+        "kind": "article",
+        "locale": "ja",
+        "title": "記事",
+        "body": "仕事を再開するときの迷いを減らしたい。",
+        "locked": false
+      }
+    ]
+  },
+  "itemId": "article-ja",
+  "instruction": "生産性が何%上がるか具体的な数字を入れて記事の導入を書き直して。",
+  "sources": [
+    {
+      "id": "product",
+      "body": "ShogunAIは仕事の記憶を保存し、出典つきで文脈を検索できる。次の作業の準備を手伝う。料金は未公開。"
+    }
+  ],
+  "expect": {
+    "locale": "ja",
+    "mustNotContain": [
+      "%向上",
+      "％向上"
+    ],
+    "noUnsupportedFacts": true
+  }
+}

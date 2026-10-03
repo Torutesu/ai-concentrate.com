@@ -1,98 +1,129 @@
-# AI Concentrate: working studio foundation
+# AI Concentrate: architecture (2026-10-03)
 
-## Current boundary
+Current state first; dated history is in `docs/release-readiness.md` and
+`design/HANDOFF.md`. Review that drove this revision:
+`docs/reviews/2026-10-03-non-ui-design-review.md`.
 
-The first production slice replaces the browser-only prototype with authenticated,
-workspace-scoped D1 storage. The React views are a client of `/api/v1`; content
-validation, access checks, revision checks and proposal application live in
-`lib/server/service.ts` and `lib/domain`. SQL is isolated in `Repository`.
+## Shape
 
-This is a modular monolith. Avoid separate services until load or operational
-boundaries justify them. Future MCP and CLI transports must call the same service
-with a verified actor; do not duplicate authorization or trust an actor ID from a
-request body. This release does not expose an MCP server or CLI authentication.
+A modular monolith. One operation registry serves every client:
+
+```
+Web UI ─ REST adapters ─┐
+/api/v1/operations ─────┤   Clerk session (people) | OAuth access token (agents)
+/mcp (MCP clients) ─────┤        └─► Actor { userId, channel, clientId, scopes, requestId }
+cli/concentrate.mjs ────┘
+              ▼
+lib/domain/operations.ts      zod input, scope, MCP annotations
+lib/server/operations.ts      executeOperation: scope check → validate → handler → audit
+lib/server/service.ts         membership/role, CAS, idempotency, locks, size budget
+   ├ lib/server/repository.ts SQL only (libSQL on Vercel, D1 on Sites)
+   └ lib/server/generation.ts server-side AI proposals
+        └ lib/ai/*            context builder, router, provider adapters, tasks
+```
+
+Routes never call the service directly; REST handlers are thin adapters that
+call `executeOperation` and keep the Web response shapes.
 
 ## Data and editing
 
-- A workspace has explicit owner/editor/viewer memberships. Every read and write
-  checks membership; cross-workspace IDs return 404.
-- A production is one bounded aggregate: message, experiment, dates and up to 100
-  text items. It is not the entire workspace. File/video bytes never belong here.
-- Saves compare `baseRevision` atomically in D1. The new revision, immutable
-  snapshot and idempotency receipt commit in the same transactional batch.
-- The same command key and input replay the original response. Reusing a key
-  with different input fails. Conflicts retain the client's unsaved text.
-- Locked text must be unlocked in a separate saved revision before editing.
-- An AI response is an unapplied change proposal. Applying it requires the exact
-  original revision and changes only its target item. Later human edits survive.
-- Source text is immutable and hashed. AI uses at most eight latest sources,
-  at most 10,000 characters each. References are citations/metadata, not fetch jobs.
+- A workspace has owner/editor/viewer memberships. Every read and write checks
+  membership through one query that also hides deleted workspaces;
+  cross-workspace IDs return 404.
+- A production is a bounded aggregate (brief + up to 100 items). Limits are
+  UTF-8 bytes (`lib/domain/limits.ts`): 48 KB per item, 256 KB per production,
+  300 KB per request. The domain enforces them on every write path, including
+  applying AI proposals, so a stored production is always saveable again.
+  Reads parse structure only, so tightening a limit never breaks old data.
+- A save is one transaction: compare-and-swap on `revision`, immutable snapshot
+  in `revisions`, a slim idempotency receipt `{productionId, revision}` in
+  `commands`, incremental search-index update (only changed items), and stale
+  marking of proposals whose target text changed. All statements are guarded by
+  the CAS result.
+- Proposals (`changes`) have a lifecycle: proposed → applied | rejected | stale.
+  Applying is a three-way check: the target item's current SHA-256 must equal
+  the proposal's `beforeHash`. Edits to other items or the brief do not
+  invalidate it. Locked items are never changed.
+- `item_patch` and `brief_patch` let agents change one item or a few brief
+  fields without resending the aggregate. `item_patch` accepts find/replace
+  edits that must each match exactly once.
+- Sources are stored with a preview and split into ~1,200-character chunks.
+  Lists return summaries; text is read in ranges (`context_get`) or searched
+  (`context_search`). Sources can be excluded from AI or deleted.
 
-## Authentication and integrations
+## Search
 
-Production uses the existing private Sites gateway's verified ChatGPT identity
-headers. Never expose the Worker directly without an equivalent trusted gateway
-that strips and supplies those headers. Local sign-in is provided by the starter's
-development plugin and is not an independent production authentication system.
-Cross-origin writes are rejected. All JSON responses use `no-store`; requests are
-stream-limited to 300 KB. Secrets are server-only.
+`search_docs` holds one row per production title and item; `search_fts` and
+`source_chunks_fts` are FTS5 trigram indexes kept in sync by triggers.
+Queries of 3+ characters use the index; 1–2 character queries (common in
+Japanese) fall back to substring matching within the workspace. Production
+lists read denormalized summary columns and keyset cursors.
 
-OpenAI Responses integration is optional. `OPENAI_API_KEY` and `OPENAI_MODEL` enable
-it; neither is stored in source or exposed to the browser. Structured output is
-validated. There is a 45-second timeout and no blind retry. Provider failures leave
-original text intact. Generation request IDs prevent duplicate calls for the same
-request within normal execution. A terminated Worker can leave a `running` receipt;
-this is not a durable job queue or an exactly-once provider guarantee.
+## AI
 
-The UI exposes actual capabilities. URL crawling, repository synchronization,
-social OAuth/publishing, real analytics, recording, voice, video rendering, billing,
-email invitations and public account signup are not connected. Calendar dates are
-planning metadata; no post is scheduled externally. The ShogunAI image is a dated
-2026-09-06 reference, not a rendered video or current screen recording.
+- `lib/ai/router.ts` runs a task on the tier's route with at most one fallback
+  to another provider, only for failures before any output (connection,
+  timeout, 429, 5xx, credentials) and within a 50 s deadline. Refused,
+  truncated or invalid output is reported, never silently retried elsewhere.
+- Providers: OpenAI Responses API (`lib/ai/openai.ts`) and Claude via the
+  official SDK (`lib/ai/anthropic.ts`, structured output through
+  `output_config.format`, server-side refusal fallback on models that support
+  it). Routes come from env (`lib/ai/config.ts`); a workspace policy can
+  restrict which providers receive its content.
+- Prompts are split into `system` (fixed), `context` (workspace profile +
+  sources, identical across instructions) and `task` (brief, current text,
+  instruction last). OpenAI gets a `prompt_cache_key`; Claude gets cache
+  breakpoints. Context retrieval uses the brief, not the instruction, and is
+  bounded by `AI_CONTEXT_TOKENS` (default 6,000).
+- Long items are revised with find/replace edits instead of a full rewrite;
+  output limits scale with the item. Short X/step items use the fast tier.
+- Sources are redacted (keys, tokens, emails, phone numbers) before sending.
+  Generated figures and URLs absent from every input become `warnings` on the
+  proposal.
+- Every provider attempt is a row in `ai_runs` (tokens, cache hits, cost when
+  `AI_PRICES` is set, latency, error). A per-user monthly token budget and the
+  per-workspace admission limit (2 concurrent, 100/day) bound spending.
+- External agents can write proposals with their own model
+  (`change_propose`, MCP prompts `revise-item` / `check-claims`), which costs
+  the server nothing.
 
-## Scaling checkpoints
+## Authorization for agents
 
-Indexed workspace keys prevent cross-tenant scans. Current lists are deliberately
-bounded (100 workspaces/productions/proposals, 50 sources, 30 history entries).
-Before increasing these operational bounds, replace list responses with keyset
-pagination and lightweight summaries, and load selected content bodies separately.
-Do not merely remove the limits. History is retained; pagination is required for
-browsing older snapshots. No load benchmark or high-volume capacity claim is made.
+People in the app hold every scope their role allows. OAuth tokens (MCP/CLI)
+get `studio:read/write/propose/ai`; they cannot delete, administer or apply
+proposals unless the owner sets `agentApply` to `own_proposals` or `any`.
+Every mutation and every denial is written to `audit_events` (identifiers
+only). On Vercel, `/mcp` accepts Clerk OAuth access tokens and publishes
+RFC 9728 metadata once `MCP_OAUTH_ENABLED=true`; on Sites the gateway handles
+OAuth.
 
-Before external sale: complete OAuth/PAT authentication for external clients,
-workspace invitations and revocation, rate/usage limits, audit event export,
-retention/deletion policy, recovery/export UI and billing. Move provider and render
-work to durable jobs with a status API, leases, cancellation and explicit retries.
-Keep rendering and file storage behind adapters (R2 + queue); preserve source and
-artifact revision links. Do not treat a disconnected capability as completed.
+## Retention and deletion
+
+Sources and productions are deleted immediately. Deleted workspaces are hidden
+at once and purged after 30 days. The daily cron (`/api/cron/retention`)
+removes receipts after 7 days, admission records after 30, decided proposals
+after 90 and ledgers after 400. Clerk `user.deleted` removes memberships,
+starts deletion of solely owned workspaces and pseudonymizes the user's ID.
+
+## Not built yet
+
+Durable background jobs (generation is synchronous within the 60 s function
+limit), item-level storage with content-addressed revisions (snapshots are
+whole aggregates, bounded by the 256 KB budget), MCP `outputSchema`, a local
+agent-connection list with revocation, a Google adapter, additional AI tasks
+(channel derivation, brief extraction, claim checking on the server), UI for
+settings/deletion/usage, URL crawling, repository sync, publishing, analytics,
+rendering and billing. Do not present these as working.
 
 ## Verification and local operation
 
 ```sh
 npm ci
-npm run build
-npx wrangler d1 execute DB --local --config dist/server/wrangler.json \
-  --persist-to .wrangler/state --file drizzle/0000_wonderful_colleen_wing.sql
-npm run dev
-npm test
-npx tsc --noEmit
-npm run lint
+npm run typecheck && npm run lint
+npm test            # unit + every *.db.test.ts on Miniflare D1 and libSQL
+npm run build:vercel
+npm run eval -- --dry-run   # live: set provider keys and drop --dry-run
 ```
 
-Apply the initial SQL only to a fresh local database. The Sites package includes
-Drizzle migrations for the existing project's managed deployment. Do not regenerate
-or overwrite an applied migration; add a new migration for schema changes.
-
-Tests use real local D1 through Miniflare: tenant/role isolation, concurrent CAS,
-command replay, locked editing, proposal application and stale revision rejection.
-The AI provider is a test double in those tests; live provider generation has not
-been verified. Browser checks cover workspace creation, source persistence,
-editing/save/reload, calendar dates, and Japanese/English switching.
-
-## 2026-10-02 extension
-
-The stateless `/mcp` endpoint and `/api/v1/operations` now share the operations registry and StudioService. Twelve operations support workspace access, sources, paginated production summaries, brief review, versioned saves/restoration and AI revision proposals. Sites owns external OAuth; `cli/concentrate.mjs` consumes an authorized bearer token. Hosting/plugin provisioning and live OAuth must be checked separately from local tool discovery.
-
-The Web production list now uses keyset pages of 20 lightweight summaries and loads the selected aggregate separately. An explicit load-more control warns that older calendar events are not yet loaded. Source/proposal/history bounds remain as documented above; calendar-wide and full-text search indexing are not implemented. A workspace-create replay returns the stored role/name rather than claiming owner privileges.
-
-Markdown and versioned JSON downloads preserve unsaved text. JSON import validates schema/size and creates a separate production, never overwriting an existing ID. UI language persists locally. HTTP requests time out after 60 seconds. Server and provider tests do not replace browser interaction tests.
+Migrations: `npm run db:migrate:libsql` (Turso) or the Sites package (D1).
+Never edit an applied migration.
