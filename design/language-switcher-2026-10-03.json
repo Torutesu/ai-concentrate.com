@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-03",
+  "components": {
+    "sidebar": "141:10673",
+    "settings": "141:10687"
+  },
+  "instances": {
+    "sidebar": "141:10674",
+    "settings": "141:10700"
+  },
+  "boardId": "141:10713",
+  "states": {
+    "japanese": "141:10716",
+    "english": "141:10731"
+  },
+  "sourceHashes": {
+    "app/globals.css": "386d9477e4f9586bb65f5db83a69b1757cdab91680aa08e7ebae19c408660d10",
+    "components/studio/studio.tsx": "d0a177f64ebb0ad03785d29399434801f50c929f3a32bab1220b3ea6e66af20f",
+    "components/studio/use-studio.ts": "d7953a0d1811fca9dbb8eac29194eafef23825910017f4a7f3120e550390fe0a",
+    "components/studio/workspace-views.tsx": "e812ea3fab205d3e39707d91dfa86df89e9e7934bdf5b140f3dcbb32379d2399",
+    "components/studio/language-switcher.tsx": "1d5f8c2ab10e3d71ce28c3c4901b62fcd55de017443d0e9d1f76b36fd588b303"
+  },
+  "validation": "Native editable components/text and Japanese/English menu states visually reviewed. Shared sidebar updated in place; previous settings input retained hidden. Browser local fixture: JA/EN switch preserves unsaved draft, active tab and output language; checked radio semantics; keyboard End/Enter; Escape focus restoration; reload persistence; settings/sidebar consistency; 390px EN width verified. Build passes. No fresh signed-in hosted check; broader mobile/EN Figma variants remain incomplete."
+}

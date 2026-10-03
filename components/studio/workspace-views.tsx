@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { LanguageSwitcher } from "./language-switcher";
 import type { StudioController } from "./use-studio";
 import { labels } from "./i18n";
 import { Action, Badge, Empty, Field, Panel } from "./ui";
@@ -469,16 +470,11 @@ export function SettingsView({
         <p>{user.name}</p>
         <p className="muted">{user.email}</p>
         <Badge>ChatGPT {en ? "authentication" : "認証"}</Badge>
-        <label className="field">
-          <span>{en ? "Interface language" : "表示言語"}</span>
-          <select
-            value={s.locale}
-            onChange={(e) => s.setLocale(e.target.value as "ja" | "en")}
-          >
-            <option value="ja">日本語</option>
-            <option value="en">English</option>
-          </select>
-        </label>
+        <LanguageSwitcher
+          locale={s.locale}
+          onChange={s.setLocale}
+          variant="settings"
+        />
         <p className="muted">
           {en
             ? "Team invites and billing are not enabled in this private version."

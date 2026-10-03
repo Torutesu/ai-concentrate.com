@@ -384,7 +384,9 @@ export function useStudio() {
     draft,
     locale,
     setLocale: (value: Locale) => {
+      if (value === locale) return;
       setLocale(value);
+      setNotice("");
       try {
         localStorage.setItem("concentrate.locale", value);
       } catch {}

@@ -17,6 +17,7 @@ import { labels, type View } from "./i18n";
 import { Action, Panel } from "./ui";
 import { Editor } from "./editor";
 import { Home } from "./home";
+import { LanguageSwitcher } from "./language-switcher";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import {
   Context,
@@ -72,14 +73,7 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
             <strong>{user.name}</strong>
             <small>{s.workspace?.role ?? "—"}</small>
           </div>
-          <select
-            aria-label="Language / 言語"
-            value={s.locale}
-            onChange={(e) => s.setLocale(e.target.value as "ja" | "en")}
-          >
-            <option value="ja">日本語</option>
-            <option value="en">English</option>
-          </select>
+          <LanguageSwitcher locale={s.locale} onChange={s.setLocale} />
         </div>
       </aside>
       <main
