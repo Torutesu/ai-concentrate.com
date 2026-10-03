@@ -960,7 +960,8 @@
       "restore": "103:10674",
       "signin": "103:10789",
       "vercelSignin": "118:10099",
-      "vercelAuthPending": "118:10110"
+      "vercelAuthPending": "118:10110",
+      "vercelClerkSignin": "123:379"
     },
     "sidebarId": "89:9074",
     "fieldComponents": [
@@ -982,34 +983,31 @@
       "lib/domain/export.ts": "fac4b32c074a818684646df88cf644771cab81fb5bc43582de9969fc5993136d",
       "components/studio/history.tsx": "7e1fc976e5f54d827768b34f7ec0d360aae3f808796d341502714d297a48af90",
       "components/studio/production-search.tsx": "fb65ec4c7b7d4b5d2767e7494824654c25a68011cc5f8a5825ed4aa3e627ff1b",
-      "app/sign-in/[[...sign-in]]/page.tsx": "53ef9e50ec85d2d745bb501e7460bd60fec4c5e87b2f57b8a4c87de4d8a5a6a1"
+      "app/sign-in/[[...sign-in]]/page.tsx": "daaa9324fbec8363060d21537ed017640a841ff11a0ee7fc6a690896c8b4699b",
+      "lib/platform/runtime.ts": "79847d2c1ec9c30354adabcaa0f6af7ee966b6c4fed1588bd6959015e3dc21f4",
+      "app/layout.tsx": "0ce24e3eca03870961e1f0e0ae629754786e9e50ac152235fa0283039534f8ce"
     },
     "lastChange": {
       "screens": [
-        "89:9427",
-        "103:8714",
-        "103:8853",
-        "103:8992",
-        "103:9131",
-        "98:8656",
-        "103:10674"
+        "118:10099",
+        "118:10110",
+        "123:379"
       ],
-      "nodes": [
-        "112:10097",
-        "112:10098",
-        "112:10101",
-        "112:10103",
-        "112:10105",
-        "113:10099",
-        "113:10100"
-      ],
-      "validation": "Existing screen IDs preserved. Targeted overflow/opacity fix visually verified. Dialog text is representative content, not a claim of live AI output."
+      "validation": "Existing auth root IDs preserved; new connected form native/editable. Designer explorations unchanged. Screenshot review passed; provider styling representative."
     },
     "vercelAuth": {
       "entry": "118:10099",
       "pending": "118:10110",
-      "status": "editable login entry and missing-config state synchronized; hosted Clerk UI not yet connected or verified",
-      "preservedSitesSignin": "103:10789"
+      "status": "editable connected Clerk form added from observed live labels; entry and pending geometry corrected; Google OAuth and save/reload verified in Dia",
+      "preservedSitesSignin": "103:10789",
+      "connected": "123:379",
+      "validation": "Native text and existing field/button instances, no raster UI. Screenshots reviewed. Provider branding/icons and exact third-party widget styling are representative, not pixel-identical."
+    },
+    "runtimeOnlyUpdate": {
+      "date": "2026-10-03",
+      "change": "Moved Clerk session provider to root for token refresh on workspace pages; no visual markup, components, tokens or screen changes. Generation admission and safe provider errors added server-side.",
+      "figmaMutationRequired": false,
+      "verification": "Existing editable auth nodes preserved; no new visual parity claim."
     }
   }
 }

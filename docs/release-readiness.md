@@ -1,4 +1,4 @@
-# Release readiness — 2026-10-02
+# Release readiness — 2026-10-03
 
 ## Delivered in this increment
 - Agent brief review and channel-specific editorial policy; saved brief propagated to the provider.
@@ -11,16 +11,16 @@
 - 29 editable Figma implementation views and representative states, with existing IDs and designer explorations preserved.
 
 ## External setup required
-- AI: no runtime provider secrets configured. Enable OpenAI Developers for approved key provisioning, then configure model and evaluate actual outputs.
+- AI: Preview provider key and model are configured. Actual hosted generation and output quality still require verification. Sensitive keys cannot be validated from an empty CLI environment pull.
 - MCP: local discovery and unauthenticated rejection tested; hosted OAuth/plugin connection is published; user connection remains unverified.
 
 ## Still unimplemented (not merely credential setup)
-- Public commercial registration/recovery, workspace invitations, billing and account lifecycle.
+- Commercial auth hardening, workspace invitations, billing and account lifecycle. Clerk development Google login and authenticated save/reload have been verified.
 - URL crawling and repository synchronization; source import currently stores supplied text.
 - Social OAuth, scheduling execution and measured analytics.
 - Capture, durable render/voice jobs, asset storage and finished video export.
 - Full mobile/English Figma state parity and all prototype interactions.
-- Source/proposal pagination, indexed/ranked search, retention and usage limits.
+- Source/proposal pagination, indexed/ranked search, retention and account-wide usage accounting.
 
 These are not represented as working capabilities. This release is the private content-editing foundation, not the completed external-sale product. Video follows the working-AI milestone per the approved sequence.
 
@@ -30,3 +30,15 @@ Browser: Desktop Japanese body search, empty result, revision preview and close 
 
 ## Search limits
 Search is literal substring matching over titles and item bodies, scoped by workspace before returning at most 50 summaries. Japanese substrings and literal `%`/`_` work; this is not tokenized/ranked or indexed full-text search. Large-workspace latency/load tests are not complete. An indexed search projection can replace the repository query without changing Web/CLI/MCP operations. Reuse a cursor only with the same query; concurrent edits may reorder results.
+
+## 2026-10-03 generation reliability
+- Atomic workspace admission: at most 2 active generation claims within 120 seconds and 100 attempts in a rolling 24 hours. Failed attempts count; old running claims expire for admission. This is a workspace safety limit, not an account-wide billing cap.
+- Existing idempotency behavior remains intact. Provider failures do not overwrite saved content. No automatic provider retry.
+- Timeout, connection, credential/model access, quota and other upstream failures return separate safe domain errors without raw provider payloads.
+- 16 service/provider tests against each of D1 and libSQL (32 passing); TypeScript and Next production build pass. ESLint: zero errors, 43 existing design-script warnings. No application UI source changes in this increment.
+
+Preview deployed successfully: https://ai-concentrate-4fb4uiag9-torutesus-projects.vercel.app
+Observed old preview: server-rendered identity but API requests required re-login.
+Root ClerkProvider now maintains session refresh across workspace pages; sign-in
+uses this shared provider. Hosted build passed; final authenticated browser check
+and live generation remain pending because Dia was actively switched to another task.

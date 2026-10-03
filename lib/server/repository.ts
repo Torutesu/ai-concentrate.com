@@ -286,11 +286,28 @@ export class Repository {
     return JSON.parse(r.data) as Change;
   }
   async claimGeneration(workspaceId: string, key: string, hash: string) {
+    const now = new Date();
+    const activeSince = new Date(now.getTime() - 120_000).toISOString();
+    const daySince = new Date(now.getTime() - 86_400_000).toISOString();
+    // Admission is one atomic SQLite statement, shared across server instances.
+    // Failed attempts count too: a provider may charge before the response is lost.
     const r = await this.db
       .prepare(
-        "INSERT OR IGNORE INTO generation_requests(workspace_id,key,fingerprint,status,created_at) VALUES(?,?,?,'running',?)",
+        `INSERT OR IGNORE INTO generation_requests(workspace_id,key,fingerprint,status,created_at)
+         SELECT ?,?,?,'running',?
+         WHERE (SELECT COUNT(*) FROM generation_requests WHERE workspace_id=? AND status='running' AND created_at>?) < 2
+           AND (SELECT COUNT(*) FROM generation_requests WHERE workspace_id=? AND created_at>?) < 100`,
       )
-      .bind(workspaceId, key, hash, new Date().toISOString())
+      .bind(
+        workspaceId,
+        key,
+        hash,
+        now.toISOString(),
+        workspaceId,
+        activeSince,
+        workspaceId,
+        daySince,
+      )
       .run();
     if (r.meta.changes) return null;
     const old = await this.db
@@ -303,7 +320,13 @@ export class Repository {
         status: string;
         changeId: string | null;
       }>();
-    if (old?.fingerprint !== hash)
+    if (!old)
+      throw new DomainError(
+        "GENERATION_LIMIT",
+        429,
+        "Generation limit reached: at most 2 concurrent requests and 100 attempts per workspace in 24 hours. Try again later.",
+      );
+    if (old.fingerprint !== hash)
       throw new DomainError(
         "IDEMPOTENCY_MISMATCH",
         409,

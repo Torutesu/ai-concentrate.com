@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClerkProvider, SignIn } from "@clerk/nextjs";
+import { SignIn } from "@clerk/nextjs";
 import { authConfigured } from "@/lib/platform/runtime";
 export default function SignInPage() {
   if (!authConfigured())
@@ -15,10 +15,8 @@ export default function SignInPage() {
       </main>
     );
   return (
-    <ClerkProvider>
-      <main className="auth-page">
-        <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/" />
-      </main>
-    </ClerkProvider>
+    <main className="auth-page">
+      <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/" />
+    </main>
   );
 }

@@ -386,3 +386,102 @@ test("history pages retain all revisions and snapshots are read-only and tenant-
     }),
   );
 });
+
+test("generation admission is atomic, tenant scoped and replay safe at capacity", async () => {
+  await repo.create("alice", "Limits", "limits");
+  const claims = await Promise.allSettled(
+    Array.from({ length: 8 }, (_, i) =>
+      repo.claimGeneration("limits", `g${i}`, `h${i}`),
+    ),
+  );
+  assert.equal(claims.filter((r) => r.status === "fulfilled").length, 2);
+  for (const r of claims.filter((r) => r.status === "rejected"))
+    assert.equal(r.reason.code, "GENERATION_LIMIT");
+  const first = claims.findIndex((r) => r.status === "fulfilled");
+  await assert.rejects(
+    repo.claimGeneration("limits", `g${first}`, `h${first}`),
+    { code: "GENERATION_PENDING" },
+  );
+  await repo.failGeneration("limits", `g${first}`);
+  assert.equal(
+    await repo.claimGeneration("limits", "replacement", "replacement"),
+    null,
+  );
+  assert.equal(
+    await repo.claimGeneration("other-limit-tenant", "independent", "h"),
+    null,
+  );
+});
+test("failed provider attempts still consume the rolling daily allowance", async () => {
+  for (let i = 0; i < 100; i++) {
+    await repo.claimGeneration("daily-limit", `g${i}`, "h");
+    await repo.failGeneration("daily-limit", `g${i}`);
+  }
+  await assert.rejects(repo.claimGeneration("daily-limit", "overflow", "h"), {
+    code: "GENERATION_LIMIT",
+  });
+});
+
+test("provider errors are actionable without leaking upstream content", async () => {
+  const { createOpenAIProvider } = await import(
+    "../lib/server/openai-provider"
+  );
+  const input = {
+    title: "Test",
+    kind: "draft" as const,
+    playbookVersion: "test",
+    brief: {
+      persona: "",
+      problem: "",
+      claim: "",
+      hypothesis: "",
+      cta: "",
+      destination: "",
+      metric: "",
+      evaluationDate: "",
+    },
+    sourceCoverage: { selected: 0, truncated: false },
+    locale: "ja",
+    body: "",
+    instruction: "Draft",
+    sources: [],
+  };
+  for (const [status, code] of [
+    [401, "PROVIDER_AUTH"],
+    [403, "PROVIDER_AUTH"],
+    [429, "PROVIDER_CAPACITY"],
+    [500, "PROVIDER_ERROR"],
+  ] as const) {
+    const provider = createOpenAIProvider(
+      { OPENAI_API_KEY: "test", OPENAI_MODEL: "test" },
+      async () => new Response("private upstream content", { status }),
+    );
+    await assert.rejects(provider.revise(input), (e: unknown) => {
+      assert.equal((e as { code: string }).code, code);
+      assert.ok(!(e as Error).message.includes("private"));
+      return true;
+    });
+  }
+  const timeout = createOpenAIProvider(
+    { OPENAI_API_KEY: "test", OPENAI_MODEL: "test" },
+    async () => {
+      throw new DOMException("private", "TimeoutError");
+    },
+  );
+  await assert.rejects(timeout.revise(input), { code: "PROVIDER_TIMEOUT" });
+  const valid = createOpenAIProvider(
+    { OPENAI_API_KEY: "test", OPENAI_MODEL: "test" },
+    async () =>
+      Response.json({
+        status: "completed",
+        output: [
+          {
+            content: [
+              { type: "output_text", text: '{"body":"確認済みの初稿"}' },
+            ],
+          },
+        ],
+      }),
+  );
+  assert.equal(await valid.revise(input), "確認済みの初稿");
+});

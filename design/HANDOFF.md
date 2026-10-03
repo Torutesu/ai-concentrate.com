@@ -70,3 +70,14 @@ User authorized moving to Vercel. Existing Sites screens/publication remain inta
 Editable auth entry 118:10099 and missing-provider state 118:10110 were added next
 to implementation states, reusing native button/text components. Connected Clerk
 form verification is pending provider provisioning; do not claim end-to-end login.
+
+## 2026-10-02 — connected Clerk auth synchronization
+Added native editable connected form 123:379 using observed live field/button labels,
+existing field/button instances and color variables. Corrected entry 118:10099 and
+pending 118:10110 to centered auth cards; preserved root IDs and designer explorations.
+Google OAuth and authenticated workspace/context/draft save/reload are now verified.
+Provider branding/icons and exact third-party widget styling are representative,
+not pixel-identical. No screenshot is embedded as UI. API key setup remains pending.
+
+## 2026-10-03 runtime-only hardening
+Clerk session provider moved from sign-in wrapper to root to maintain session tokens during editing. Visual markup/components/tokens unchanged; existing editable Figma auth screens retained. Server admission/error handling has no new screen. Source fingerprints updated; no fresh visual parity claim.

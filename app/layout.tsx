@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,7 +23,12 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className="antialiased">
-        {children}
+        {process.env.CLERK_SECRET_KEY &&
+        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? (
+          <ClerkProvider>{children}</ClerkProvider>
+        ) : (
+          children
+        )}
         {process.env.NODE_ENV === "development" && (
           <script
             src="https://mcp.figma.com/mcp/html-to-design/capture.js"
