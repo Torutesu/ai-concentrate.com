@@ -427,11 +427,7 @@ export function useStudio() {
       setSourceDrafts((ds) => ({
         ...ds,
         [workspaceId]: {
-          name: "",
-          kind: "markdown",
-          reference: "",
-          body: "",
-          ...ds[workspaceId],
+          ...(ds[workspaceId] ?? {name:"",kind:"markdown" as const,reference:"",body:""}),
           ...fields,
         },
       })),

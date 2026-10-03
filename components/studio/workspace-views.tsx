@@ -351,7 +351,7 @@ export function Calendar({ s }: { s: StudioController }) {
             : "公開予定 · 自動投稿は未接続"}
         </Badge>
       </div>
-      <Panel>
+      <div className="calendar-workbench"><Panel className="calendar-month">
         <div
           className="calendar-grid"
           role="group"
@@ -410,8 +410,7 @@ export function Calendar({ s }: { s: StudioController }) {
           )}
         </div>
       </Panel>
-      {s.nextCursor && <Action disabled={s.busy} onClick={s.loadMore}>{en ? "Load more ideas into calendar" : "カレンダーに表示する企画をさらに読み込む"}</Action>}
-      <Panel>
+      <Panel className="calendar-plan">
         <h2>{day || (en ? "Plan a publication date" : "公開予定を決める")}</h2>
         {!s.draft ? <NoIdea s={s} /> : <IdeaPicker s={s} />}
         {s.draft && (
@@ -422,6 +421,9 @@ export function Calendar({ s }: { s: StudioController }) {
               value={s.draft.plannedDate}
               onChange={(e) => s.patch({ plannedDate: e.target.value })}
             />
+            <Field label={en ? "Destination URL" : "誘導先URL"} type="url" value={s.draft.destination} onChange={e=>s.patch({destination:e.target.value})}/>
+            <Field label={en ? "Success metric" : "評価指標"} placeholder={en ? "e.g. activated users from this campaign" : "例：この施策から初回の価値体験に到達した人数"} value={s.draft.metric} onChange={e=>s.patch({metric:e.target.value})}/>
+            <Field label={en ? "Review date" : "評価日"} type="date" value={s.draft.evaluationDate} onChange={e=>s.patch({evaluationDate:e.target.value})}/>
             {day && (
               <Action
                 disabled={s.draft.plannedDate === day}
@@ -432,7 +434,7 @@ export function Calendar({ s }: { s: StudioController }) {
             )}
           </fieldset>
         )}
-      </Panel>
+      </Panel></div>
     </>
   );
 }

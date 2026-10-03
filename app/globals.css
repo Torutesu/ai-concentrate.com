@@ -1282,3 +1282,8 @@ summary {
 .script-preview-text { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; max-height:65vh; overflow:auto; }
 .day-number[aria-pressed=true] { background:#254d38; color:#fff; border-radius:50%; }
 @media(max-width:850px) { .workflow-expanded {padding:18px;} .workflow-next {align-items:flex-start; flex-direction:column;} .workflow-next h2 {font-size:18px;} .workflow-steps {gap:6px;} .workflow-steps button {padding:8px; font-size:11px;} .section-heading {flex-wrap:wrap;} }
+.calendar-workbench {display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;}
+.calendar-workbench .panel {min-width:0;padding:20px;}
+.calendar-workbench .calendar-cell {min-height:92px;}
+.calendar-workbench .calendar-plan h2 {font-size:16px;}
+@media(max-width:1200px) {.calendar-workbench{grid-template-columns:minmax(0,1fr);}}
