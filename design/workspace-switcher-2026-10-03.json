@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-03",
+  "componentId": "89:9074",
+  "triggerId": "128:10116",
+  "boardId": "138:10461",
+  "states": {
+    "open": "138:10466",
+    "emptySearch": "138:10493",
+    "create": "138:10509",
+    "unsaved": "139:10671",
+    "saveFailed": "138:10521"
+  },
+  "sourceHashes": {
+    "app/globals.css": "0fa383b5c3ce7e26010bdb3175564386ba91be8c61c87130f4314e397f164004",
+    "components/studio/studio.tsx": "b1b67917ccb64b28139b299c0a2bccc444f092b29468ec4588f538ad29826ce6",
+    "components/studio/use-studio.ts": "70ec090f0c909c67d9fd6e14eb99a2697d4e8cc393e2a422458c279b9101acb3",
+    "components/studio/workspace-switcher.tsx": "063082f7d033e9d99085a38c81af0279b7295987534c00aefa7bdb5521005bd9"
+  },
+  "validation": "Editable native layers visually reviewed. Shared sidebar component updated in place. Local fixture browser checks: search empty, switch, remembered workspace, invalid remembered workspace fallback, same-workspace draft preservation, save failure stays in old workspace, save-and-switch, creation to context, 390px EN dialog/menu, Escape focus restoration. Build passed; 16 D1 + 16 libSQL tests passed. Hosted signed-in workflow not verified in this task. Existing dedicated mobile/EN Figma variants remain incomplete."
+}

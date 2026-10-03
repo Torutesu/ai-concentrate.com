@@ -17,6 +17,7 @@ import { labels, type View } from "./i18n";
 import { Action, Panel } from "./ui";
 import { Editor } from "./editor";
 import { Home } from "./home";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import {
   Context,
   Strategy,
@@ -51,23 +52,7 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
           <img src="/design-assets/flask.svg" alt="" />
           Concentrate
         </div>
-        <label className="workspace-picker">
-          <span>{t.workspace}</span>
-          <select
-            disabled={s.busy}
-            value={s.workspaceId}
-            onChange={(e) => s.switchWorkspace(e.target.value)}
-          >
-            <option value="" disabled>
-              {en ? "Select workspace" : "選択してください"}
-            </option>
-            {s.workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <WorkspaceSwitcher s={s} />
         <nav aria-label={en ? "Main navigation" : "メインナビゲーション"}>
           {nav.map(([v, Icon], index) => (
             <button

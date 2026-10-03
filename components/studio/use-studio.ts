@@ -65,7 +65,18 @@ export function useStudio() {
       ]);
       setWorkspaces(w.workspaces);
       setCaps(c.capabilities);
-      setWorkspaceId((id) => id || w.workspaces[0]?.id || "");
+      let remembered = "";
+      try {
+        remembered = localStorage.getItem("concentrate.workspace") ?? "";
+      } catch {}
+      setWorkspaceId(
+        (id) =>
+          [id, remembered].find((candidate) =>
+            w.workspaces.some((ws) => ws.id === candidate),
+          ) ||
+          w.workspaces[0]?.id ||
+          "",
+      );
       setError("");
     } catch (e) {
       setError(message(e));
@@ -167,18 +178,22 @@ export function useStudio() {
       replace(r.production);
       pendingSave.current = null;
       setNotice(locale === "ja" ? "保存しました" : "Saved");
+      return true;
     });
   }
-  async function createWorkspace(name: string) {
-    if (!confirmLeave()) return;
+  async function createWorkspace(name: string, decision?: "save" | "discard") {
+    if (operation.current) return;
+    if (dirty && decision === "save" && !(await save())) return;
+    if (dirty && !decision && !confirmLeave()) return;
     return run(async () => {
       const r = await api<{ workspace: Workspace }>("/workspaces", {
         method: "POST",
         body: json({ name }),
       });
       setWorkspaces((ws) => [...ws, r.workspace]);
-      setWorkspaceId(r.workspace.id);
+      activateWorkspace(r.workspace.id);
       setView("context");
+      return true;
     });
   }
   async function createProduction(example = false, imported?: Production) {
@@ -233,15 +248,30 @@ export function useStudio() {
       setNextCursor(r.nextCursor);
     });
   }
-  function switchWorkspace(id: string) {
-    if (busy || !confirmLeave()) return;
+  function activateWorkspace(id: string) {
     setProductions([]);
     setSelected(undefined);
+    setSelectedId("");
     setNextCursor(null);
     setSources([]);
     setChanges([]);
     setDraft(null);
+    setError("");
+    setNotice("");
+    pendingSave.current = null;
+    setLoadedWorkspaceId("");
     setWorkspaceId(id);
+    try {
+      localStorage.setItem("concentrate.workspace", id);
+    } catch {}
+  }
+  async function switchWorkspace(id: string, decision?: "save" | "discard") {
+    if (operation.current || !workspaces.some((w) => w.id === id)) return;
+    if (id === workspaceId) return true;
+    if (dirty && decision === "save" && !(await save())) return;
+    if (dirty && !decision && !confirmLeave()) return;
+    activateWorkspace(id);
+    return true;
   }
   function patch(fields: Partial<Production>) {
     setDraft((p) => (p ? { ...p, ...fields } : p));

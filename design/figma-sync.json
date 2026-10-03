@@ -1,6 +1,6 @@
 {
   "fileKey": "m2RyfqGnGhNIJ7lsEPBuEp",
-  "syncedAt": "2026-10-02",
+  "syncedAt": "2026-10-03",
   "phase": "complete",
   "createdNodeIds": [
     "5:238",
@@ -893,9 +893,12 @@
   },
   "sourceHashes": {
     "app/page.tsx": "baccfbd90d56994d7c2f769aeb2989c8659831e8234c8e630fbcf7f693e8a508",
-    "app/globals.css": "a1b14493325488a4aa5e632ac7addcf4fd6c8b6dcff687cf63596effe7e715db",
+    "app/globals.css": "0fa383b5c3ce7e26010bdb3175564386ba91be8c61c87130f4314e397f164004",
     "app/layout.tsx": "d35ac27a475e2908f0659c041f8da9f1d0dfd453246c9bdb005af2e8a733da02",
-    "lib/content.ts": "9b462dd79d87d2b2d265f4ef6be804a702b23492655b1a9eebac8d3ab530ca91"
+    "lib/content.ts": "9b462dd79d87d2b2d265f4ef6be804a702b23492655b1a9eebac8d3ab530ca91",
+    "components/studio/studio.tsx": "b1b67917ccb64b28139b299c0a2bccc444f092b29468ec4588f538ad29826ce6",
+    "components/studio/use-studio.ts": "70ec090f0c909c67d9fd6e14eb99a2697d4e8cc393e2a422458c279b9101acb3",
+    "components/studio/workspace-switcher.tsx": "063082f7d033e9d99085a38c81af0279b7295987534c00aefa7bdb5521005bd9"
   },
   "validation": {
     "frames": 157,
@@ -971,11 +974,11 @@
     "verification": "29 editable implementation views/states. Search fields, history rows and saved-revision modal updated in place; no raster UI; Noto Sans JP verified. 13 Miniflare tests pass. Desktop browser confirms Japanese body search, empty result and saved-revision preview. AI/provider and full mobile/English parity remain unverified.",
     "sourceHashes": {
       "app/page.tsx": "3800f43d97022557949831b2e59e3bcc2cabbe8211716481b1594c04c892f469",
-      "app/globals.css": "9c11a41e1e7e902d600818674f95623b8debf1bdbf990a98a1f53203ef2b7a7a",
-      "components/studio/use-studio.ts": "ca15a5fbc154d262e669f6a6e03a80dc452519bc3967066b3c042832d1da376c",
+      "app/globals.css": "0fa383b5c3ce7e26010bdb3175564386ba91be8c61c87130f4314e397f164004",
+      "components/studio/use-studio.ts": "70ec090f0c909c67d9fd6e14eb99a2697d4e8cc393e2a422458c279b9101acb3",
       "components/studio/workspace-views.tsx": "464e8a11e2e598b17121e698f9925897e2b28211713e240ae9af8f5b05aba533",
       "components/studio/i18n.ts": "3e79dcc35921cfe41e7abf623d5eaacd2a0fb0d8a43143ba72075b89a39424b0",
-      "components/studio/studio.tsx": "38558cf0223512cb66c85b56653fbbd7dfb2f054db1cbefab6d2d4f6b5285680",
+      "components/studio/studio.tsx": "b1b67917ccb64b28139b299c0a2bccc444f092b29468ec4588f538ad29826ce6",
       "components/studio/editor.tsx": "b033af2ffef8b44033bd33060b136a9c3a23a27fe2938644009c3840357da365",
       "components/studio/ui.tsx": "c249c0165794ffb0c7fbcdb31e5780d823411eaa017ef72fada2808436120969",
       "components/studio/agent-review.tsx": "dffe6d621bbea8eef1dd02b96d00b28473460cfc666a0c1f79a57ee0560ae641",
@@ -986,7 +989,8 @@
       "app/sign-in/[[...sign-in]]/page.tsx": "daaa9324fbec8363060d21537ed017640a841ff11a0ee7fc6a690896c8b4699b",
       "lib/platform/runtime.ts": "79847d2c1ec9c30354adabcaa0f6af7ee966b6c4fed1588bd6959015e3dc21f4",
       "app/layout.tsx": "0ce24e3eca03870961e1f0e0ae629754786e9e50ac152235fa0283039534f8ce",
-      "components/studio/home.tsx": "7b0296dfe6a89e1a235d520997a53bb3af4d6c455aff80d31478b23537617e8f"
+      "components/studio/home.tsx": "7b0296dfe6a89e1a235d520997a53bb3af4d6c455aff80d31478b23537617e8f",
+      "components/studio/workspace-switcher.tsx": "063082f7d033e9d99085a38c81af0279b7295987534c00aefa7bdb5521005bd9"
     },
     "lastChange": {
       "screens": [
@@ -1057,5 +1061,25 @@
       },
       "validation": "Home/editor screenshots reviewed; 8 main layouts within root bounds; native text and component instances retained. Shared controls updated across 32 implementation frames; exploratory designs unchanged. Browser checks use isolated local fixtures, not hosted AI data. Mobile EN layout tested in browser; dedicated mobile/EN Figma variants are not part of this sync."
     }
+  },
+  "workspaceSwitcher": {
+    "date": "2026-10-03",
+    "componentId": "89:9074",
+    "triggerId": "128:10116",
+    "boardId": "138:10461",
+    "states": {
+      "open": "138:10466",
+      "emptySearch": "138:10493",
+      "create": "138:10509",
+      "unsaved": "139:10671",
+      "saveFailed": "138:10521"
+    },
+    "sourceHashes": {
+      "app/globals.css": "0fa383b5c3ce7e26010bdb3175564386ba91be8c61c87130f4314e397f164004",
+      "components/studio/studio.tsx": "b1b67917ccb64b28139b299c0a2bccc444f092b29468ec4588f538ad29826ce6",
+      "components/studio/use-studio.ts": "70ec090f0c909c67d9fd6e14eb99a2697d4e8cc393e2a422458c279b9101acb3",
+      "components/studio/workspace-switcher.tsx": "063082f7d033e9d99085a38c81af0279b7295987534c00aefa7bdb5521005bd9"
+    },
+    "validation": "Editable native layers visually reviewed. Shared sidebar component updated in place. Local fixture browser checks: search empty, switch, remembered workspace, invalid remembered workspace fallback, same-workspace draft preservation, save failure stays in old workspace, save-and-switch, creation to context, 390px EN dialog/menu, Escape focus restoration. Build passed; 16 D1 + 16 libSQL tests passed. Hosted signed-in workflow not verified in this task. Existing dedicated mobile/EN Figma variants remain incomplete."
   }
 }
