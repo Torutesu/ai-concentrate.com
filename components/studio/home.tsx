@@ -102,7 +102,7 @@ export function Home({ s }: { s: StudioController }) {
                     disabled={s.busy}
                     onClick={() => open(current.id)}
                   >
-                    {en ? "Open editor" : "編集を続ける"}
+                    {s.workspace?.role === "viewer" ? (en ? "View content" : "内容を確認") : (en ? "Open editor" : "編集を続ける")}
                     <ArrowRight size={16} />
                   </Action>
                 </div>

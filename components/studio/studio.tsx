@@ -89,19 +89,6 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
           </span>
           <span className={`save-status ${s.dirty ? "is-dirty" : ""}`}>
             <span className="status-dot" />
-            {s.workspace?.role === "viewer" && (
-              <div className="notice" role="status">
-                {en
-                  ? "View-only access · an owner or editor can make changes."
-                  : "閲覧のみ・変更はオーナーまたは編集者が行えます。"}
-              </div>
-            )}
-            {!s.loading &&
-              !s.workspaceFailed &&
-              s.workspaceId &&
-              !["home", "settings", "integrations"].includes(s.view) && (
-                <Workflow s={s} />
-              )}
             {s.loading
               ? en
                 ? "Loading…"

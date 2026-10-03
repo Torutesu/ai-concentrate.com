@@ -66,7 +66,7 @@ export function Workflow({
         <div className="workflow-next">
           <div>
             <small>{en ? "Next action" : "次に進めること"}</small>
-            <h2>{actions[flow.next]}</h2>
+            <h2>{s.workspace?.role === "viewer" ? (en ? "Review the production progress" : "企画の進捗を確認") : actions[flow.next]}</h2>
           </div>
           <Action
             primary
@@ -78,7 +78,7 @@ export function Workflow({
             }
             onClick={() => void next()}
           >
-            {en ? "Continue" : "進める"}
+            {s.workspace?.role === "viewer" ? (en ? "Review" : "確認する") : (en ? "Continue" : "進める")}
             <ArrowRight size={16} />
           </Action>
         </div>

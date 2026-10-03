@@ -12,13 +12,6 @@ import type {
 import { api, json, ApiError } from "../../lib/studio-client";
 import { newProduction, shogunExample } from "../../lib/domain/seed";
 import type { Locale, View, Tab } from "./i18n";
-type SourceDraft = Pick<Source, "name" | "kind" | "reference" | "body">;
-const emptySourceDraft: SourceDraft = {
-  name: "",
-  kind: "markdown",
-  reference: "",
-  body: "",
-};
 /** List entries carry a preview; the full body is loaded when a source is opened. */
 export type LoadedSource = SourceSummary & { body?: string };
 export function useStudio() {
@@ -435,11 +428,26 @@ export function useStudio() {
     nextCursor,
     loadMore,
     sources,
-    sourceDraft: sourceDrafts[workspaceId] ?? emptySourceDraft,
-    updateSourceDraft: (fields: Partial<SourceDraft>) =>
+    sourceDraft: sourceDrafts[workspaceId] ?? {
+      name: "",
+      kind: "markdown" as const,
+      reference: "",
+      body: "",
+    },
+    updateSourceDraft: (
+      fields: Partial<{
+        name: string;
+        kind: "markdown" | "url" | "repository";
+        reference: string;
+        body: string;
+      }>,
+    ) =>
       setSourceDrafts((ds) => ({
         ...ds,
-        [workspaceId]: { ...emptySourceDraft, ...ds[workspaceId], ...fields },
+        [workspaceId]: {
+          ...(ds[workspaceId] ?? {name:"",kind:"markdown" as const,reference:"",body:""}),
+          ...fields,
+        },
       })),
     loadSource,
     changes,

@@ -660,7 +660,10 @@ function Review({ s }: { s: StudioController }) {
           <Action
             primary
             disabled={
-              s.busy || s.dirty || stale(c) || s.workspace?.role === "viewer"
+              s.busy ||
+              s.dirty ||
+              stale(c) ||
+              s.workspace?.role === "viewer"
             }
             onClick={() => s.apply(c.id)}
           >
