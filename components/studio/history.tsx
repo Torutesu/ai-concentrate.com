@@ -89,7 +89,7 @@ function HistoryContent({ s }: { s: StudioController }) {
       {page.items.map((r) => (
         <div key={r.revision} className="identity">
           <strong>v{r.revision}</strong>
-          <span>{new Date(r.createdAt).toLocaleString(s.locale)}</span>
+          <span>{Number.isNaN(Date.parse(r.createdAt)) ? (en ? "Date unavailable" : "日時を取得できません") : new Date(r.createdAt).toLocaleString(s.locale)}</span>
           {r.revision === s.selected?.revision && (
             <Badge>{en ? "Current" : "現在の版"}</Badge>
           )}

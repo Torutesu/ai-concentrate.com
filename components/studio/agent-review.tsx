@@ -1,17 +1,11 @@
 "use client";
+import { NoIdea } from "./workflow";
 import { reviewReadiness } from "../../lib/agents/marketing";
 import type { StudioController } from "./use-studio";
-import { Action, Badge, Empty, Panel } from "./ui";
+import { Action, Badge, Panel } from "./ui";
 export function AgentReview({ s }: { s: StudioController }) {
   const en = s.locale === "en";
-  if (!s.draft)
-    return (
-      <Empty title={en ? "No production selected" : "企画がありません"}>
-        <Action onClick={() => s.createProduction()}>
-          {en ? "Create idea" : "企画を作成"}
-        </Action>
-      </Empty>
-    );
+  if (!s.draft) return <NoIdea s={s} />;
   const report = reviewReadiness(s.draft, s.sources.length);
   const names: Record<string, string> = {
     persona: "対象ユーザー",

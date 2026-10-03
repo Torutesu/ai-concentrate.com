@@ -1,23 +1,45 @@
 "use client";
 import { useState } from "react";
+import { NoIdea } from "./workflow";
+import {
+  ArrowRight,
+  FileText,
+  Plug,
+  BookOpen,
+  BarChart3,
+  Video,
+  Terminal,
+} from "lucide-react";
 import { LanguageSwitcher } from "./language-switcher";
 import type { StudioController } from "./use-studio";
 import { labels } from "./i18n";
-import { Action, Badge, Empty, Field, Panel } from "./ui";
+import { Action, Badge, Field, Panel } from "./ui";
 export function Context({ s }: { s: StudioController }) {
   const en = s.locale === "en",
-    [name, setName] = useState(""),
-    [kind, setKind] = useState<"markdown" | "url" | "repository">("markdown"),
-    [reference, setReference] = useState(""),
-    [body, setBody] = useState(""),
-    [fileError, setFileError] = useState("");
+    { name, kind, reference, body } = s.sourceDraft;
+  const [fileError, setFileError] = useState("");
+  const setName = (name: string) => s.updateSourceDraft({ name }),
+    setKind = (kind: "markdown" | "url" | "repository") =>
+      s.updateSourceDraft({ kind }),
+    setReference = (reference: string) => s.updateSourceDraft({ reference }),
+    setBody = (body: string) => s.updateSourceDraft({ body });
   async function read(file?: File) {
     if (!file) return;
     if (file.size > 180000) {
       setFileError(en ? "File is too large." : "ファイルが大きすぎます。");
       return;
     }
-    const text = await file.text();
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      setFileError(
+        en
+          ? "Could not read this file. Try another file."
+          : "読み込めませんでした。別のファイルを選んでください。",
+      );
+      return;
+    }
     if (text.length > 60000) {
       setFileError(
         en ? "Maximum 60,000 characters." : "60,000文字以内にしてください。",
@@ -105,7 +127,21 @@ export function Context({ s }: { s: StudioController }) {
         </form>
       </Panel>
       <Panel>
-        <h2>{en ? "Workspace sources" : "登録済みの資料"}</h2>
+        <div className="section-heading">
+          <h2>{en ? "Workspace sources" : "登録済みの資料"}</h2>
+          {s.sources.length > 0 && (
+            <Action
+              disabled={s.busy || (!s.draft && s.workspace?.role === "viewer")}
+              onClick={async () => {
+                if (s.draft || (await s.createProduction()))
+                  s.setView("strategy");
+              }}
+            >
+              {en ? "Continue to brief" : "企画へ進む"}
+              <ArrowRight size={14} />
+            </Action>
+          )}
+        </div>
         {s.sources.length ? (
           s.sources.map((source) => (
             <details key={source.id} className="source-detail">
@@ -133,14 +169,7 @@ export function Context({ s }: { s: StudioController }) {
 export function Strategy({ s }: { s: StudioController }) {
   const en = s.locale === "en",
     p = s.draft;
-  if (!p)
-    return (
-      <Empty title={en ? "Create an idea first" : "企画を作成してください"}>
-        <Action primary onClick={() => s.createProduction()}>
-          {labels[s.locale].new}
-        </Action>
-      </Empty>
-    );
+  if (!p) return <NoIdea s={s} />;
   return (
     <>
       <IdeaPicker s={s} />
@@ -219,13 +248,17 @@ export function Analytics({ s }: { s: StudioController }) {
   return (
     <>
       <Panel>
-        <h2>{en ? "Measurement is not connected" : "計測は未接続です"}</h2>
+        <div className="section-heading">
+          <h2>{en ? "Experiment notes" : "成果の振り返り"}</h2>
+          <Badge>{en ? "Manual entry" : "手動記録"}</Badge>
+        </div>
         <p className="muted">
           {en
-            ? "No sample results are presented as real performance. Record the metric and your decision below."
-            : "実績データはまだありません。評価指標と、検証後の判断を企画に残せます。"}
+            ? "Record the actual result, what you learned and the next experiment. Automatic analytics import is not connected."
+            : "実測値・分かったこと・次に変えることを企画に残します。実績の自動取得は未接続です。"}
         </p>
       </Panel>
+      {!p && <NoIdea s={s} />}
       {p && (
         <>
           <IdeaPicker s={s} />
@@ -234,6 +267,11 @@ export function Analytics({ s }: { s: StudioController }) {
               <Field
                 label={en ? "Metric" : "評価指標"}
                 value={p.metric}
+                placeholder={
+                  en
+                    ? "e.g. 10 activated users from this campaign"
+                    : "例：この施策から初回の価値体験に到達した人数"
+                }
                 onChange={(e) => s.patch({ metric: e.target.value })}
               />
               <Field
@@ -244,6 +282,11 @@ export function Analytics({ s }: { s: StudioController }) {
               />
               <Field
                 label={en ? "Findings and next decision" : "検証結果・次の判断"}
+                placeholder={
+                  en
+                    ? "Actual result and period:\nEvidence / source URL:\nWhat we learned:\nNext: continue, change or stop"
+                    : "実測値・集計期間：\n根拠・参照URL：\n分かったこと：\n次の判断：継続・変更・停止"
+                }
                 multiline
                 value={p.decision}
                 onChange={(e) => s.patch({ decision: e.target.value })}
@@ -260,7 +303,10 @@ export function Calendar({ s }: { s: StudioController }) {
     [month, setMonth] = useState(
       () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     ),
-    [day, setDay] = useState("");
+    [day, setDay] = useState(() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    });
   const year = month.getFullYear(),
     m = month.getMonth(),
     offset = (month.getDay() + 6) % 7,
@@ -274,6 +320,17 @@ export function Calendar({ s }: { s: StudioController }) {
             onClick={() => setMonth(new Date(year, m - 1, 1))}
           >
             ←
+          </Action>
+          <Action
+            onClick={() => {
+              const d = new Date();
+              setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+              setDay(
+                `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+              );
+            }}
+          >
+            {en ? "Today" : "今日"}
           </Action>
           <h2>
             {month.toLocaleDateString(s.locale, {
@@ -323,6 +380,7 @@ export function Calendar({ s }: { s: StudioController }) {
                   <button
                     className="day-number"
                     aria-label={date}
+                    aria-pressed={day === date}
                     onClick={() => setDay(date)}
                   >
                     {n}
@@ -352,9 +410,10 @@ export function Calendar({ s }: { s: StudioController }) {
           )}
         </div>
       </Panel>
+      {s.nextCursor && <Action disabled={s.busy} onClick={s.loadMore}>{en ? "Load more ideas into calendar" : "カレンダーに表示する企画をさらに読み込む"}</Action>}
       <Panel>
         <h2>{day || (en ? "Plan a publication date" : "公開予定を決める")}</h2>
-        <IdeaPicker s={s} />
+        {!s.draft ? <NoIdea s={s} /> : <IdeaPicker s={s} />}
         {s.draft && (
           <fieldset disabled={s.busy || s.workspace?.role === "viewer"}>
             <Field
@@ -364,7 +423,10 @@ export function Calendar({ s }: { s: StudioController }) {
               onChange={(e) => s.patch({ plannedDate: e.target.value })}
             />
             {day && (
-              <Action onClick={() => s.patch({ plannedDate: day })}>
+              <Action
+                disabled={s.draft.plannedDate === day}
+                onClick={() => s.patch({ plannedDate: day })}
+              >
                 {en ? "Use selected date" : "選択した日付を使う"}
               </Action>
             )}
@@ -377,80 +439,136 @@ export function Calendar({ s }: { s: StudioController }) {
 export function Integrations({ s }: { s: StudioController }) {
   const en = s.locale === "en";
   const entries = [
-    [
-      "AI",
-      s.caps.ai,
-      en
-        ? "Reviewable revisions from saved sources."
-        : "保存済み資料を参照した変更案の生成。",
-    ],
-    [
-      "Markdown",
-      true,
-      en ? "Import and store source text." : "資料本文の読み込み・保存。",
-    ],
-    [
-      "URL / GitHub",
-      false,
-      en
-        ? "References can be saved; automatic sync is pending."
-        : "参照先と本文は保存可能。自動同期は未接続。",
-    ],
-    [
-      "X / Reddit / YouTube",
-      false,
-      en
-        ? "Draft editing is available; publishing is pending."
-        : "原稿編集は利用可能。外部への投稿は未接続。",
-    ],
-    [
-      "Video / Voice / Export",
-      false,
-      en
-        ? "Storyboard and script editing only."
-        : "シーン構成・台本の編集に対応。",
-    ],
-    [
-      "Analytics",
-      false,
-      en
-        ? "Performance ingestion is pending."
-        : "実績データの取り込みは未接続。",
-    ],
-    [
-      "MCP / CLI",
-      s.caps.mcp,
-      en
-        ? "Shared operations endpoint available. Connect the Site plugin with OAuth; CLI requires an authorized token."
-        : "共通操作の接続口を用意。SiteプラグインのOAuth接続、CLIは認可済みトークンが必要です。",
-    ],
-  ] as const;
+    {
+      name: en ? "AI writing" : "AIライティング",
+      icon: Plug,
+      state: s.caps.ai
+        ? en
+          ? "Configured"
+          : "設定済み"
+        : en
+          ? "Setup required"
+          : "設定が必要",
+      description: s.caps.ai
+        ? en
+          ? "Generate proposals using saved sources. Review before applying."
+          : "保存済み資料から変更案を生成し、確認して適用します。"
+        : en
+          ? "An administrator needs to configure the AI provider. Manual editing is available."
+          : "AIの利用には管理者による接続設定が必要です。手動編集は利用できます。",
+      view: "content" as const,
+      tab: "draft" as const,
+      action: en ? "Open editor" : "原稿を開く",
+    },
+    {
+      name: en ? "Product sources" : "製品資料",
+      icon: BookOpen,
+      state: en ? "Manual import" : "手動取り込み",
+      description: en
+        ? "Import Markdown or paste text with a URL / repository reference. Automatic sync is not available."
+        : "Markdownの読み込み、URL・リポジトリと本文の保存に対応。自動同期は未接続です。",
+      view: "context" as const,
+      action: en ? "Add sources" : "資料を追加",
+    },
+    {
+      name: "X / Reddit / YouTube",
+      icon: FileText,
+      state: en ? "Publishing unavailable" : "自動投稿は未接続",
+      description: en
+        ? "Prepare channel-specific copy and export Markdown. Publish from each platform."
+        : "媒体別の原稿を編集し、Markdownで書き出せます。投稿は各プラットフォームで行います。",
+      view: "content" as const,
+      tab: "x" as const,
+      action: en ? "Prepare content" : "媒体別の原稿へ",
+    },
+    {
+      name: en ? "Video production" : "動画制作",
+      icon: Video,
+      state: en ? "Script editing" : "台本編集に対応",
+      description: en
+        ? "Plan scenes and narration. Recording, voice generation and rendering are not connected."
+        : "シーンとナレーションを編集できます。収録・音声生成・動画書き出しは未接続です。",
+      view: "content" as const,
+      tab: "video" as const,
+      action: en ? "Edit script" : "台本を編集",
+    },
+    {
+      name: en ? "Measurement" : "効果測定",
+      icon: BarChart3,
+      state: en ? "Manual entry" : "手動記録",
+      description: en
+        ? "Record observed results and the next experiment. Automatic performance import is not connected."
+        : "実測値と次の施策を記録できます。実績の自動取得は未接続です。",
+      view: "analytics" as const,
+      action: en ? "Record results" : "結果を記録",
+    },
+    {
+      name: "MCP / CLI",
+      icon: Terminal,
+      state: s.caps.mcp
+        ? en
+          ? "Available"
+          : "利用可能"
+        : en
+          ? "Not connected"
+          : "未接続",
+      description: en
+        ? "Agent access uses authenticated operations. Setup details are available to the workspace administrator."
+        : "認証済みの操作をエージェントから利用します。接続手順は管理者向けガイドを確認してください。",
+    },
+  ];
   return (
     <div className="integration-grid">
-      {entries.map(([name, active, description]) => (
-        <Panel key={name}>
-          <div className="identity">
+      {entries.map(
+        ({ name, icon: Icon, state, description, view, tab, action }) => (
+          <Panel key={name}>
+            <div className="section-heading">
+              <span className="icon-tile">
+                <Icon size={20} />
+              </span>
+              <Badge>{state}</Badge>
+            </div>
             <h2>{name}</h2>
-            <Badge>
-              {active
-                ? en
-                  ? "Available"
-                  : "利用可能"
-                : en
-                  ? "Not connected"
-                  : "未接続"}
-            </Badge>
-          </div>
-          <p className="muted">{description}</p>
-          {name === "AI" && !active && (
-            <small>
-              {en
-                ? "Server configuration: OPENAI_API_KEY and OPENAI_MODEL."
-                : "サーバーでOPENAI_API_KEY・OPENAI_MODELを設定してください。"}
-            </small>
-          )}
-        </Panel>
-      ))}
+            <p className="muted">{description}</p>
+            {view && (
+              <Action
+                onClick={() => {
+                  s.setView(view);
+                  if (tab) s.setTab(tab);
+                }}
+              >
+                {action}
+                <ArrowRight size={14} />
+              </Action>
+            )}
+            {name === "AIライティング" || name === "AI writing"
+              ? !s.caps.ai &&
+                s.workspace?.role === "owner" && (
+                  <details className="setup-details">
+                    <summary>
+                      {en ? "Administrator setup" : "管理者向け設定"}
+                    </summary>
+                    <p>
+                      {en
+                        ? "Configure OPENAI_API_KEY and OPENAI_MODEL in the hosting environment, then redeploy. Never paste keys into product sources."
+                        : "ホスティング環境でOPENAI_API_KEYとOPENAI_MODELを設定して再デプロイしてください。キーは製品資料に貼り付けないでください。"}
+                    </p>
+                  </details>
+                )
+              : null}
+            {name === "MCP / CLI" && (
+              <details className="setup-details">
+                <summary>{en ? "Connection details" : "接続情報"}</summary>
+                <p>
+                  {en
+                    ? "The MCP endpoint is /mcp on this deployment. Use your host’s supported authentication; an endpoint alone does not grant access."
+                    : "接続先はこのデプロイ先の /mcp です。ホストが対応する認証を使用してください。URLだけではアクセス権は付与されません。"}
+                </p>
+              </details>
+            )}
+          </Panel>
+        ),
+      )}
     </div>
   );
 }
@@ -469,7 +587,7 @@ export function SettingsView({
         <h2>{en ? "Account" : "アカウント"}</h2>
         <p>{user.name}</p>
         <p className="muted">{user.email}</p>
-        <Badge>ChatGPT {en ? "authentication" : "認証"}</Badge>
+        <Badge>{en ? "Signed in" : "ログイン済み"}</Badge>
         <LanguageSwitcher
           locale={s.locale}
           onChange={s.setLocale}

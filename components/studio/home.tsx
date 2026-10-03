@@ -10,6 +10,7 @@ import {
   Layers,
 } from "lucide-react";
 import type { StudioController } from "./use-studio";
+import { Workflow } from "./workflow";
 import { Action, Panel } from "./ui";
 
 export function Home({ s }: { s: StudioController }) {
@@ -18,8 +19,7 @@ export function Home({ s }: { s: StudioController }) {
     s.productions.find((p) => p.id === s.selected?.id) ?? s.productions[0];
   const editable = s.workspace?.role !== "viewer" && !s.busy;
   const open = async (id: string) => {
-    await s.select(id);
-    s.setView("content");
+    if (await s.select(id)) s.setView("content");
   };
   return (
     <div className="home-workspace">
@@ -74,6 +74,7 @@ export function Home({ s }: { s: StudioController }) {
           </strong>
         </div>
       </div>
+      <Workflow s={s} expanded />
       <div className="home-columns">
         <div>
           <Panel className="resume-card">

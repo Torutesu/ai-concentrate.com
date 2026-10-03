@@ -12,6 +12,17 @@ import { api, json, ApiError } from "../../lib/studio-client";
 import { newProduction, shogunExample } from "../../lib/domain/seed";
 import type { Locale, View, Tab } from "./i18n";
 export function useStudio() {
+  const [sourceDrafts, setSourceDrafts] = useState<
+    Record<
+      string,
+      {
+        name: string;
+        kind: "markdown" | "url" | "repository";
+        reference: string;
+        body: string;
+      }
+    >
+  >({});
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [workspaceId, setWorkspaceId] = useState(""),
     [productions, setProductions] = useState<ProductionSummary[]>([]),
@@ -25,6 +36,7 @@ export function useStudio() {
     [view, setView] = useState<View>("home"),
     [tab, setTab] = useState<Tab>("draft"),
     [loadedWorkspaceId, setLoadedWorkspaceId] = useState(""),
+    [workspaceFailed, setWorkspaceFailed] = useState(false),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -48,11 +60,16 @@ export function useStudio() {
   }, [locale]);
   useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {
-      if (dirty || busy) e.preventDefault();
+      if (
+        dirty ||
+        busy ||
+        Object.values(sourceDrafts).some((d) => d.name || d.reference || d.body)
+      )
+        e.preventDefault();
     };
     window.addEventListener("beforeunload", fn);
     return () => window.removeEventListener("beforeunload", fn);
-  }, [dirty, busy]);
+  }, [dirty, busy, sourceDrafts]);
   const init = useCallback(async () => {
     try {
       try {
@@ -120,9 +137,13 @@ export function useStudio() {
         setSelectedId(first?.id ?? "");
         setSelected(detail?.production);
         setDraft(detail?.production.data ?? null);
+        setWorkspaceFailed(false);
       })
       .catch((e) => {
-        if (!controller.signal.aborted) setError(message(e));
+        if (!controller.signal.aborted) {
+          setError(message(e));
+          setWorkspaceFailed(true);
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadedWorkspaceId(workspaceId);
@@ -197,7 +218,7 @@ export function useStudio() {
     });
   }
   async function createProduction(example = false, imported?: Production) {
-    if (!confirmLeave()) return;
+    if (workspace?.role === "viewer" || !confirmLeave()) return;
     return run(async () => {
       const id = crypto.randomUUID(),
         data =
@@ -218,11 +239,14 @@ export function useStudio() {
       );
       replace(r.production);
       setView("content");
-      setTab("draft");
+      setTab(example || imported ? "draft" : "plan");
+      return true;
     });
   }
   async function select(id: string) {
-    if (busy || !confirmLeave()) return;
+    if (busy) return;
+    if (id === selectedId) return true;
+    if (!confirmLeave()) return;
     return run(async () => {
       const r = await api<{ production: VersionedProduction }>(
         `/workspaces/${workspaceId}/productions/${id}`,
@@ -230,6 +254,7 @@ export function useStudio() {
       setSelected(r.production);
       setSelectedId(id);
       setDraft(r.production.data);
+      return true;
     });
   }
   async function loadMore() {
@@ -260,6 +285,7 @@ export function useStudio() {
     setNotice("");
     pendingSave.current = null;
     setLoadedWorkspaceId("");
+    setWorkspaceFailed(false);
     setWorkspaceId(id);
     try {
       localStorage.setItem("concentrate.workspace", id);
@@ -274,6 +300,7 @@ export function useStudio() {
     return true;
   }
   function patch(fields: Partial<Production>) {
+    if (workspace?.role === "viewer") return;
     setDraft((p) => (p ? { ...p, ...fields } : p));
   }
   async function addSource(
@@ -360,7 +387,9 @@ export function useStudio() {
       }>(`/workspaces/${workspaceId}/productions`);
       setProductions(r.items);
       setNextCursor(r.nextCursor);
-      const id = selectedId || r.items[0]?.id;
+      const id = r.items.some((p) => p.id === selectedId)
+        ? selectedId
+        : r.items[0]?.id;
       const detail = id
         ? await api<{ production: VersionedProduction }>(
             `/workspaces/${workspaceId}/productions/${id}`,
@@ -369,16 +398,43 @@ export function useStudio() {
       setSelected(detail?.production);
       setSelectedId(id ?? "");
       setDraft(detail?.production.data ?? null);
+      setWorkspaceFailed(false);
     });
   }
   return {
     workspaces,
     workspaceId,
+    workspaceFailed,
     workspace,
     productions,
     nextCursor,
     loadMore,
     sources,
+    sourceDraft: sourceDrafts[workspaceId] ?? {
+      name: "",
+      kind: "markdown" as const,
+      reference: "",
+      body: "",
+    },
+    updateSourceDraft: (
+      fields: Partial<{
+        name: string;
+        kind: "markdown" | "url" | "repository";
+        reference: string;
+        body: string;
+      }>,
+    ) =>
+      setSourceDrafts((ds) => ({
+        ...ds,
+        [workspaceId]: {
+          name: "",
+          kind: "markdown",
+          reference: "",
+          body: "",
+          ...ds[workspaceId],
+          ...fields,
+        },
+      })),
     changes,
     selected,
     draft,

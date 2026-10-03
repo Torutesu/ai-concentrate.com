@@ -16,6 +16,7 @@ import { useStudio } from "./use-studio";
 import { labels, type View } from "./i18n";
 import { Action, Panel } from "./ui";
 import { Editor } from "./editor";
+import { Workflow } from "./workflow";
 import { Home } from "./home";
 import { LanguageSwitcher } from "./language-switcher";
 import { WorkspaceSwitcher } from "./workspace-switcher";
@@ -88,7 +89,34 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
           </span>
           <span className={`save-status ${s.dirty ? "is-dirty" : ""}`}>
             <span className="status-dot" />
-            {s.busy ? t.saving : s.dirty ? t.unsaved : t.saved}
+            {s.workspace?.role === "viewer" && (
+              <div className="notice" role="status">
+                {en
+                  ? "View-only access · an owner or editor can make changes."
+                  : "閲覧のみ・変更はオーナーまたは編集者が行えます。"}
+              </div>
+            )}
+            {!s.loading &&
+              !s.workspaceFailed &&
+              s.workspaceId &&
+              !["home", "settings", "integrations"].includes(s.view) && (
+                <Workflow s={s} />
+              )}
+            {s.loading
+              ? en
+                ? "Loading…"
+                : "読み込み中…"
+              : s.workspaceFailed
+                ? en
+                  ? "Load failed"
+                  : "読み込み失敗"
+                : s.busy
+                  ? en
+                    ? "Processing…"
+                    : "処理中…"
+                  : (s.dirty || (s.view === "context" && Boolean(s.sourceDraft.name || s.sourceDraft.reference || s.sourceDraft.body)))
+                    ? t.unsaved
+                    : t.saved}
           </span>
         </div>
         {s.error && (
@@ -122,6 +150,19 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
               : "処理中です。編集内容は保持されています。"}
           </div>
         )}
+        {s.workspace?.role === "viewer" && (
+          <div className="notice" role="status">
+            {en
+              ? "View-only access · an owner or editor can make changes."
+              : "閲覧のみ・変更はオーナーまたは編集者が行えます。"}
+          </div>
+        )}
+        {!s.loading &&
+          !s.workspaceFailed &&
+          s.workspaceId &&
+          !["home", "settings", "integrations"].includes(s.view) && (
+            <Workflow s={s} />
+          )}
         {s.loading ? (
           <div role="status" className="loading-state">
             <span className="spinner" />
@@ -129,6 +170,22 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
             <div className="skeleton" />
             <div className="skeleton" />
           </div>
+        ) : s.workspaceFailed ? (
+          <Panel>
+            <h1>
+              {en
+                ? "Workspace could not be loaded"
+                : "ワークスペースを読み込めませんでした"}
+            </h1>
+            <p className="muted">
+              {en
+                ? "Retry or select another workspace. Your saved work has not been deleted."
+                : "再試行するか、別のワークスペースを選んでください。保存済みのデータは削除されていません。"}
+            </p>
+            <Action primary disabled={s.busy} onClick={s.reload}>
+              {en ? "Retry" : "再試行"}
+            </Action>
+          </Panel>
         ) : !s.workspaceId ? (
           <Panel>
             <h1>{en ? "Create your workspace" : "ワークスペースを作成"}</h1>

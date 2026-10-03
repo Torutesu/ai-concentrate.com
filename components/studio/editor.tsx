@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { Download, Plus, Sparkles, FileText } from "lucide-react";
+import { NoIdea } from "./workflow";
+import { Download, Plus, Sparkles, FileText, Clapperboard } from "lucide-react";
 import { productionSchema, type ContentItem } from "../../lib/domain/models";
 import { productionMarkdown } from "../../lib/domain/export";
 import { History } from "./history";
@@ -95,7 +96,7 @@ export function Editor({ s }: { s: StudioController }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function addItem() {
-    if (!p) return;
+    if (!p || !canEdit || p.items.length >= 100) return;
     const id = crypto.randomUUID();
     s.patch({
       items: [
@@ -178,14 +179,7 @@ export function Editor({ s }: { s: StudioController }) {
         ))}
       </nav>
       {!p ? (
-        <Empty title={en ? "Create your first idea" : "最初の企画を作る"}>
-          <Action primary onClick={() => s.createProduction()}>
-            {t.new}
-          </Action>
-          <Action onClick={() => s.createProduction(true)}>
-            ShogunAI {en ? "sample" : "サンプルを読み込む"}
-          </Action>
-        </Empty>
+        <NoIdea s={s} />
       ) : (
         <>
           <div className="identity editor-toolbar">
@@ -280,27 +274,34 @@ export function Editor({ s }: { s: StudioController }) {
               </Panel>
               <Panel>
                 <h2>{en ? "Production plan" : "制作計画"}</h2>
-                {p.items
-                  .filter((i) => i.kind === "scene")
-                  .map((i, n) => (
-                    <button
-                      className="list-item"
-                      key={i.id}
-                      onClick={() => {
-                        setItemId(i.id);
-                        s.setTab("video");
-                      }}
-                    >
-                      {String(n + 1).padStart(2, "0")}　{i.title}
-                    </button>
-                  ))}
-                <p className="muted">
-                  {en
-                    ? "Keep each deliverable tied to the same idea."
-                    : "同じ企画から、原稿と各媒体の成果物を編集します。"}
-                </p>
-                <Action primary onClick={() => s.setTab("video")}>
-                  {en ? "Edit video script" : "動画台本を編集"}
+                {(
+                  [
+                    ["draft", "draft"],
+                    ["x", "x"],
+                    ["article", "article"],
+                    ["reddit", "reddit"],
+                    ["video", "scene"],
+                    ["guide", "step"],
+                  ] as const
+                ).map(([tab, kind]) => (
+                  <button
+                    className="list-item channel-plan"
+                    key={tab}
+                    onClick={() => s.setTab(tab)}
+                  >
+                    <span>{t[tab]}</span>
+                    <Badge>
+                      {
+                        p.items.filter(
+                          (item) => item.kind === kind && item.body.trim(),
+                        ).length
+                      }{" "}
+                      {en ? "written" : "件の原稿"}
+                    </Badge>
+                  </button>
+                ))}
+                <Action primary onClick={() => s.setTab("draft")}>
+                  {en ? "Write the core draft" : "原稿を書く"}
                 </Action>
               </Panel>
             </fieldset>
@@ -317,10 +318,15 @@ export function Editor({ s }: { s: StudioController }) {
               </p>
               <p>
                 {en
-                  ? "The preview uses a dated ShogunAI reference, not a recording."
-                  : "プレビューは既存のShogunAI参考画像です。実収録ではありません。"}
+                  ? "Prepare your script here, then export Markdown for your production tools."
+                  : "台本を整理し、Markdownで書き出して制作ツールへ引き継げます。"}
               </p>
-              <Action onClick={() => s.setTab("video")}>{t.video}</Action>
+              <div className="actions">
+                <Action onClick={() => s.setTab("video")}>{t.video}</Action>
+                <Action onClick={() => download("md")}>
+                  {en ? "Export production brief" : "制作資料を書き出す"}
+                </Action>
+              </div>
             </Empty>
           ) : s.tab === "locales" ? (
             <div className="split">
@@ -381,17 +387,26 @@ export function Editor({ s }: { s: StudioController }) {
                   <button
                     className={`media-preview ${aspect === "9:16" ? "portrait" : ""}`}
                     onClick={() => setPreview(true)}
-                    aria-label={en ? "Expand reference" : "参考画像を拡大"}
+                    aria-label={
+                      en ? "Expand script preview" : "台本プレビューを拡大"
+                    }
                   >
-                    <img
-                      src="/design-assets/shogun-reference.png"
-                      alt="ShogunAI reference from 2026-09-06"
-                    />
+                    <Clapperboard size={28} aria-hidden="true" />
+                    <strong>
+                      {selected?.title ||
+                        (en ? "Scene preview" : "シーンプレビュー")}
+                    </strong>
+                    <p>
+                      {selected?.body ||
+                        (en
+                          ? "Write a scene to preview its script here."
+                          : "シーンを書くと、ここで台本を確認できます。")}
+                    </p>
                   </button>
                   <small className="muted">
                     {en
-                      ? "Reference · 2026-09-06 · not a recording"
-                      : "参考素材 · 2026-09-06 · 実収録ではありません"}
+                      ? "Script preview · no video rendered"
+                      : "台本プレビュー・動画は未生成"}
                   </small>
                   <div className="identity">
                     <Action onClick={() => setPreview(true)}>
@@ -450,11 +465,11 @@ export function Editor({ s }: { s: StudioController }) {
                   <>
                     <h2>
                       {en
-                        ? "No content in this language"
-                        : "この言語の原稿はまだありません"}
+                        ? `Create ${t[s.tab]} in ${outputLocale === "ja" ? "Japanese" : "English"}`
+                        : `${outputLocale === "ja" ? "日本語" : "英語"}の${t[s.tab]}を作成`}
                     </h2>
                     <Action primary disabled={!canEdit} onClick={addItem}>
-                      {en ? "Create draft" : "原稿を作成"}
+                      {en ? "Add content" : "作成する"}
                     </Action>
                   </>
                 ) : (
@@ -465,13 +480,6 @@ export function Editor({ s }: { s: StudioController }) {
                       disabled={!canEdit}
                       onChange={(e) => updateItem({ title: e.target.value })}
                     />
-                    {s.tab === "guide" && (
-                      <img
-                        className="guide-image"
-                        src="/design-assets/shogun-reference.png"
-                        alt="ShogunAI reference, 2026-09-06"
-                      />
-                    )}
                     <div className="document-body">
                       <Field
                         label={
@@ -522,8 +530,32 @@ export function Editor({ s }: { s: StudioController }) {
                         <Sparkles size={16} />
                         {en ? "Refine with AI" : "AIと磨く"}
                       </div>
+                      <div className="instruction-presets">
+                        {(en
+                          ? [
+                              "Draft from the product sources and brief",
+                              "Make the opening concise",
+                              "Adapt for the target audience",
+                            ]
+                          : [
+                              "製品資料と企画から初稿を作成",
+                              "冒頭を短く分かりやすく",
+                              "対象ユーザーに合わせて調整",
+                            ]
+                        ).map((prompt) => (
+                          <button
+                            key={prompt}
+                            type="button"
+                            disabled={!canEdit || selected.locked}
+                            onClick={() => setInstruction(prompt)}
+                          >
+                            {prompt}
+                          </button>
+                        ))}
+                      </div>
                       <Field
                         label={en ? "AI instruction" : "AIへの指示"}
+                        disabled={!canEdit || selected.locked}
                         multiline
                         placeholder={
                           en
@@ -546,6 +578,16 @@ export function Editor({ s }: { s: StudioController }) {
                       >
                         {s.busy ? (en ? "Generating…" : "生成中…") : t.generate}
                       </Action>
+                      {s.dirty && canEdit && (
+                        <Action onClick={s.save}>
+                          {en ? "Save draft" : "原稿を保存"}
+                        </Action>
+                      )}
+                      {!s.caps.ai && (
+                        <Action onClick={() => s.setView("integrations")}>
+                          {en ? "View AI connection" : "AIの接続状況を確認"}
+                        </Action>
+                      )}
                       <small className="muted">
                         {s.dirty
                           ? en
@@ -567,7 +609,14 @@ export function Editor({ s }: { s: StudioController }) {
           )}
         </>
       )}
-      {preview && <ReferenceDialog en={en} close={() => setPreview(false)} />}
+      {preview && (
+        <ReferenceDialog
+          en={en}
+          title={selected?.title ?? p?.title ?? ""}
+          body={selected?.body ?? ""}
+          close={() => setPreview(false)}
+        />
+      )}
     </>
   );
 }
@@ -628,10 +677,23 @@ function Review({ s }: { s: StudioController }) {
           ? "Generate a revision from a saved item."
           : "保存した原稿やシーンから変更案を生成できます。"}
       </p>
+      <Action onClick={() => s.setTab("draft")}>
+        {en ? "Open draft" : "原稿を開く"}
+      </Action>
     </Empty>
   );
 }
-function ReferenceDialog({ en, close }: { en: boolean; close: () => void }) {
+function ReferenceDialog({
+  en,
+  title,
+  body,
+  close,
+}: {
+  en: boolean;
+  title: string;
+  body: string;
+  close: () => void;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
@@ -641,18 +703,20 @@ function ReferenceDialog({ en, close }: { en: boolean; close: () => void }) {
       ref={ref}
       className="preview-dialog"
       onCancel={close}
-      aria-label={en ? "Reference preview" : "参考画像プレビュー"}
+      aria-label={en ? "Script preview" : "台本プレビュー"}
     >
       <Action autoFocus onClick={close}>
         {en ? "Close" : "閉じる"}
       </Action>
-      <p>
-        {en ? "Reference · not a recording" : "参考素材 · 実収録ではありません"}
+      <h2>{title}</h2>
+      <p className="muted">
+        {en
+          ? "Script preview · no video rendered"
+          : "台本プレビュー・動画は未生成"}
       </p>
-      <img
-        src="/design-assets/shogun-reference.png"
-        alt="ShogunAI reference, 2026-09-06"
-      />
+      <pre className="script-preview-text">
+        {body || (en ? "No script yet" : "台本はまだありません")}
+      </pre>
     </dialog>
   );
 }

@@ -485,3 +485,37 @@ test("provider errors are actionable without leaking upstream content", async ()
   );
   assert.equal(await valid.revise(input), "確認済みの初稿");
 });
+
+test("workflow distinguishes content preparation from actual learning", async () => {
+  const { productionWorkflow } = await import("../lib/domain/workflow");
+  const p = newProduction();
+  assert.equal(productionWorkflow(null, 0).next, "context");
+  assert.equal(productionWorkflow(p, 1).next, "strategy");
+  Object.assign(p, {
+    persona: "Founders",
+    problem: "Lost context",
+    claim: "Resume work",
+    cta: "Try",
+    destination: "https://example.test",
+    metric: "Activated users",
+    plannedDate: "2026-10-10",
+    evaluationDate: "2026-10-17",
+  });
+  assert.equal(productionWorkflow(p, 1).next, "draft");
+  p.items[0].body = "A real draft";
+  const flow = productionWorkflow(p, 1);
+  assert.equal(flow.next, "analytics");
+  assert.equal(
+    flow.complete,
+    false,
+    "A scheduled draft is not evidence of learning or publication",
+  );
+  p.decision =
+    "Measured 3 activated users. Revise the opening and run another test.";
+  assert.equal(productionWorkflow(p, 1).complete, true);
+  assert.equal(
+    productionWorkflow(p, 0).next,
+    "context",
+    "Deleting all sources must reopen the evidence step",
+  );
+});
