@@ -144,12 +144,18 @@ export function Context({ s }: { s: StudioController }) {
         </div>
         {s.sources.length ? (
           s.sources.map((source) => (
-            <details key={source.id} className="source-detail">
+            <details
+              key={source.id}
+              className="source-detail"
+              onToggle={(e) => {
+                if (e.currentTarget.open) void s.loadSource(source.id);
+              }}
+            >
               <summary>
                 {source.name} <Badge>{source.kind}</Badge>
               </summary>
               <p className="muted">{source.reference}</p>
-              <pre>{source.body}</pre>
+              <pre>{source.body ?? source.preview}</pre>
               <small>
                 {new Date(source.createdAt).toLocaleString(s.locale)}
               </small>

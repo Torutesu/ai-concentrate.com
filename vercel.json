@@ -14,5 +14,11 @@
       "maxDuration": 60
     }
   },
-  "outputDirectory": ".next-vercel"
+  "outputDirectory": ".next-vercel",
+  "crons": [
+    {
+      "path": "/api/cron/retention",
+      "schedule": "17 3 * * *"
+    }
+  ]
 }

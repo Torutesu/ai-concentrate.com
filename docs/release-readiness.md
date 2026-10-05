@@ -50,3 +50,12 @@ Preview: https://ai-concentrate-jqtbq8os5-torutesus-projects.vercel.app
 - 32 domain tests pass; Next build and deployed Vercel build pass. Targeted lint: 0 errors, 4 existing image warnings.
 - Browser checks on isolated local fixtures: home-to-editor navigation; title change enables save; EN switch; 390px home, plan, draft and six primary views without page-level overflow; export Escape dismissal. This is UI evidence, not hosted auth/provider validation.
 - Figma implementation frames updated; source hashes and native node IDs recorded. Visual review covers home/editor; dedicated mobile/EN Figma parity is still incomplete.
+
+## Scalable AI core — 2026-10-03 (local; not deployed)
+Implements the non-UI review (`docs/reviews/2026-10-03-non-ui-design-review.md`, status table at its top).
+- Size budget in bytes on every write path (fixes unsaveable productions and D1 `SQLITE_TOOBIG`).
+- Slim idempotency receipts, summary columns, FTS5 trigram search with incremental indexing, chunked sources, retention purge and deletion (sources, productions, workspaces, accounts).
+- Multi-provider AI (OpenAI + Claude) with routing, one pre-output fallback, workspace provider policy, cacheable prompt layout, relevance-bounded context, edit-mode output, redaction, fact warnings, per-attempt ledger and monthly token budget.
+- Proposal lifecycle (proposed/applied/rejected/stale) with three-way apply; agent scopes, policy-gated agent apply, audit events; MCP prompts, actionable tool errors, compact responses, `item_patch`/`brief_patch`/`change_propose`; Clerk OAuth token acceptance and RFC 9728 metadata on Vercel.
+- CI workflow, eval harness (7 fixed cases), AGENTS.md invariants.
+Evidence: `tsc` clean; ESLint 0 errors; 15 unit tests and 36 database tests on each of Miniflare D1 and libSQL pass; Next and Sites builds pass; unauthenticated smoke test of the built server. Not verified: live providers, real MCP OAuth clients, deployed cron/webhook, browser interaction of the three non-visual UI data-layer changes.

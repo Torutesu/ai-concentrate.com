@@ -22,3 +22,6 @@ For ShogunAI, begin with founder/PM/freelancer briefs. Measure the path from exp
 ## Scope
 
 This change modifies backend generation and operations, not visible screens. The complete UI/Figma parity work and external platform integrations remain tracked separately. The local MCP implementation still needs hosted OAuth/plugin verification. No automated publishing or outreach is enabled.
+
+## 2026-10-03 — eval harness
+The fixed briefs above now exist as `evals/cases/*.json` (sparse evidence, conflicting sources, unsupported numbers, prompt injection, Japanese X, English Reddit, demo script). `npm run eval` runs them against every configured route (or `--models provider:model,...`) and applies deterministic checks: output language, length, banned phrases, required elements and figures/URLs absent from all inputs. These checks do not judge persuasiveness; keep the human review described above and report sample size. Prompt or model changes must bump the task version in `lib/ai/tasks/item-revise.ts` and attach eval output.

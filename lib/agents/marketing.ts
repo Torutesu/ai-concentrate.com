@@ -28,9 +28,8 @@ const channelPolicy: Record<ContentItem["kind"], string> = {
     "Make the opening establish the customer problem or show the product. Match the demonstration to the desired action. Describe only supported capabilities; distinguish proposed footage from existing assets. Avoid decorative intros that delay understanding.",
   step: "Use achievable steps with a visible completion condition. Do not invent UI controls or integration setup. Aim for a clear first useful result and flag dependencies that are unknown.",
 };
-export function generationInstructions(kind: ContentItem["kind"]) {
-  return `${editorialPolicy}\nChannel guidance: ${channelPolicy[kind]}`;
-}
+export const channelGuidance = (kind: ContentItem["kind"]) =>
+  channelPolicy[kind];
 export function marketingBrief(p: Production) {
   return {
     persona: p.persona,

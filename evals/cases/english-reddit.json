@@ -1,0 +1,50 @@
+{
+  "id": "english-reddit",
+  "description": "English Reddit draft: disclose affiliation, no hard sell, English output from a Japanese brief.",
+  "production": {
+    "title": "Reddit discussion",
+    "persona": "複数案件を持つフリーランス",
+    "problem": "仕事を再開するとき、前回の判断を探し直す。",
+    "claim": "前回の判断から仕事を再開する",
+    "hypothesis": "",
+    "cta": "ShogunAIを試す",
+    "destination": "https://shogunaios.com/ja",
+    "metric": "流入 → 初回の価値体験",
+    "evaluationDate": "",
+    "plannedDate": "",
+    "decision": "",
+    "items": [
+      {
+        "id": "reddit-en",
+        "kind": "reddit",
+        "locale": "en",
+        "title": "Reddit",
+        "body": "",
+        "locked": false
+      }
+    ]
+  },
+  "itemId": "reddit-en",
+  "instruction": "Write a Reddit post asking how people resume work after context switches. We build ShogunAI.",
+  "sources": [
+    {
+      "id": "product",
+      "body": "ShogunAIは仕事の記憶を保存し、出典つきで文脈を検索できる。次の作業の準備を手伝う。料金は未公開。"
+    }
+  ],
+  "expect": {
+    "locale": "en",
+    "mustContainAny": [
+      "I work on",
+      "we build",
+      "We build",
+      "I'm building",
+      "disclosure",
+      "Disclosure"
+    ],
+    "mustNotContain": [
+      "Buy now",
+      "Sign up today"
+    ]
+  }
+}

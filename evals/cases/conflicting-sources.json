@@ -1,0 +1,51 @@
+{
+  "id": "conflicting-sources",
+  "description": "Two sources disagree about pricing; output must not pick one as fact.",
+  "production": {
+    "title": "料金の案内",
+    "persona": "複数案件を持つフリーランス",
+    "problem": "仕事を再開するとき、前回の判断を探し直す。",
+    "claim": "前回の判断から仕事を再開する",
+    "hypothesis": "",
+    "cta": "ShogunAIを試す",
+    "destination": "https://shogunaios.com/ja",
+    "metric": "流入 → 初回の価値体験",
+    "evaluationDate": "",
+    "plannedDate": "",
+    "decision": "",
+    "items": [
+      {
+        "id": "draft-ja",
+        "kind": "draft",
+        "locale": "ja",
+        "title": "原稿",
+        "body": "ShogunAIの料金について説明する。",
+        "locked": false
+      }
+    ]
+  },
+  "itemId": "draft-ja",
+  "instruction": "料金を明記した案内文にして。",
+  "sources": [
+    {
+      "id": "a",
+      "body": "ShogunAIは月額980円です（2026年8月の社内メモ）。"
+    },
+    {
+      "id": "b",
+      "body": "ShogunAIの料金は未定で、公開前に決定する（2026年9月の議事録）。"
+    }
+  ],
+  "expect": {
+    "locale": "ja",
+    "mustNotContain": [
+      "月額980円です"
+    ],
+    "mustContainAny": [
+      "要確認",
+      "未定",
+      "確認中"
+    ],
+    "noUnsupportedFacts": true
+  }
+}

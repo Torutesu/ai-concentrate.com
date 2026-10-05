@@ -5,12 +5,15 @@ import type {
   Production,
   ProductionSummary,
   Source,
+  SourceSummary,
   VersionedProduction,
   Workspace,
 } from "../../lib/domain/models";
 import { api, json, ApiError } from "../../lib/studio-client";
 import { newProduction, shogunExample } from "../../lib/domain/seed";
 import type { Locale, View, Tab } from "./i18n";
+/** List entries carry a preview; the full body is loaded when a source is opened. */
+export type LoadedSource = SourceSummary & { body?: string };
 export function useStudio() {
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<
@@ -28,7 +31,7 @@ export function useStudio() {
     [productions, setProductions] = useState<ProductionSummary[]>([]),
     [nextCursor, setNextCursor] = useState<string | null>(null),
     [selected, setSelected] = useState<VersionedProduction | undefined>(),
-    [sources, setSources] = useState<Source[]>([]),
+    [sources, setSources] = useState<LoadedSource[]>([]),
     [changes, setChanges] = useState<Change[]>([]),
     [selectedId, setSelectedId] = useState(""),
     [draft, setDraft] = useState<Production | null>(null),
@@ -114,7 +117,7 @@ export function useStudio() {
         `/workspaces/${workspaceId}/productions`,
         { signal: controller.signal },
       ),
-      api<{ sources: Source[] }>(`/workspaces/${workspaceId}/sources`, {
+      api<{ sources: LoadedSource[] }>(`/workspaces/${workspaceId}/sources`, {
         signal: controller.signal,
       }),
       api<{ changes: Change[] }>(`/workspaces/${workspaceId}/changes`, {
@@ -307,14 +310,28 @@ export function useStudio() {
     input: Pick<Source, "name" | "kind" | "reference" | "body">,
   ) {
     return run(async () => {
-      const r = await api<{ source: Source }>(
+      const r = await api<{ source: LoadedSource }>(
         `/workspaces/${workspaceId}/sources`,
         { method: "POST", body: json(input) },
       );
-      setSources((s) => [r.source, ...s]);
+      setSources((s) => [{ ...r.source, body: input.body }, ...s]);
       setNotice(locale === "ja" ? "情報を保存しました" : "Source saved");
       return r.source;
     });
+  }
+  async function loadSource(id: string) {
+    const target = sources.find((x) => x.id === id);
+    if (!target || target.body !== undefined || !target.truncated) return;
+    try {
+      const r = await api<{ text: string }>(
+        `/workspaces/${workspaceId}/sources/${id}`,
+      );
+      setSources((s) =>
+        s.map((x) => (x.id === id ? { ...x, body: r.text } : x)),
+      );
+    } catch (e) {
+      setError(message(e));
+    }
   }
   async function generate(itemId: string, instruction: string) {
     if (!selected || dirty) return;
@@ -344,6 +361,7 @@ export function useStudio() {
         { method: "POST", body: json({ changeId: id }) },
       );
       replace(r.production);
+      setChanges((cs) => cs.filter((c) => c.id !== id));
       setNotice(locale === "ja" ? "変更を適用しました" : "Change applied");
     });
   }
@@ -376,7 +394,7 @@ export function useStudio() {
     if (!workspaceId) return init();
     return run(async () => {
       const [sourceResult, changeResult] = await Promise.all([
-        api<{ sources: Source[] }>(`/workspaces/${workspaceId}/sources`),
+        api<{ sources: LoadedSource[] }>(`/workspaces/${workspaceId}/sources`),
         api<{ changes: Change[] }>(`/workspaces/${workspaceId}/changes`),
       ]);
       setSources(sourceResult.sources);
@@ -431,6 +449,7 @@ export function useStudio() {
           ...fields,
         },
       })),
+    loadSource,
     changes,
     selected,
     draft,

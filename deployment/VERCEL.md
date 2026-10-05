@@ -89,3 +89,32 @@ Hosted generation/output quality, independent MCP OAuth, commercial auth hardeni
 and Production environment readiness remain unverified or incomplete.
 Generation admission now limits each workspace to 2 concurrent claims (120-second
 window) and 100 attempts per rolling day. These are not account-wide spending limits.
+
+## Configuration — 2026-10-03 (scalable AI core)
+Apply migration `0001_scalable_ai_core.sql` before deploying this code:
+`node --env-file=.env.preview.local scripts/migrate-libsql.mjs`. It adds columns,
+FTS5 indexes and backfills existing rows; it does not delete data.
+
+Environment (set in Vercel; never commit or paste values):
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | yes | Database |
+| `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | yes | Sessions and OAuth tokens |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | one provider | OpenAI route (primary by default) |
+| `OPENAI_FAST_MODEL`, `OPENAI_REASONING_EFFORT` | no | Cheaper model for short items; `low`/`medium`/`high` only for reasoning models |
+| `ANTHROPIC_API_KEY` | one provider | Adds Claude (fallback, or primary with `AI_PRIMARY_PROVIDER=anthropic`) |
+| `ANTHROPIC_MODEL`, `ANTHROPIC_FAST_MODEL`, `ANTHROPIC_EFFORT` | no | Default `claude-opus-5-5` with effort `medium` (`low` for short items) |
+| `ANTHROPIC_SERVER_FALLBACK=off` | no | Disables Claude's server-side refusal fallback |
+| `AI_ROUTING` | no | JSON per tier, e.g. `{"fast":[{"provider":"openai","model":"…"}],"standard":[…]}` |
+| `AI_PRICES` | no | JSON USD per 1M tokens per `provider:model` (`input`, `cachedInput`, `cacheWrite`, `output`); enables `cost_micros` |
+| `AI_MONTHLY_TOKEN_BUDGET` | no | Billable tokens per user per month (default 2,000,000) |
+| `AI_CONTEXT_TOKENS` | no | Source context per request (default 6,000) |
+| `MCP_OAUTH_ENABLED=true` | no | After enabling Clerk OAuth applications with dynamic client registration; publishes `/.well-known/oauth-protected-resource` |
+| `MCP_AUTHORIZATION_SERVER` | no | Overrides the issuer derived from the publishable key |
+| `CRON_SECRET` | yes for retention | Vercel Cron calls `/api/cron/retention` daily |
+| `CLERK_WEBHOOK_SECRET` | yes for account deletion | Clerk webhook to `/api/webhooks/clerk`, event `user.deleted` |
+
+Not verified in this change: live provider calls, Clerk OAuth with real MCP
+clients, the deployed cron and webhook. Tests use provider doubles and local
+D1/libSQL.

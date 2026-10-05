@@ -2,7 +2,11 @@
 import { useEffect, useState, useRef } from "react";
 import { NoIdea } from "./workflow";
 import { Download, Plus, Sparkles, FileText, Clapperboard } from "lucide-react";
-import { productionSchema, type ContentItem } from "../../lib/domain/models";
+import {
+  productionSchema,
+  type Change,
+  type ContentItem,
+} from "../../lib/domain/models";
 import { productionMarkdown } from "../../lib/domain/export";
 import { History } from "./history";
 import { ProductionSearch } from "./production-search";
@@ -622,7 +626,12 @@ export function Editor({ s }: { s: StudioController }) {
 }
 function Review({ s }: { s: StudioController }) {
   const en = s.locale === "en",
-    cs = s.changes.filter((c) => c.productionId === s.selected?.id);
+    cs = s.changes.filter((c) => c.productionId === s.selected?.id),
+    // A proposal stays applicable while its target text is unchanged.
+    stale = (c: Change) => {
+      const target = s.selected?.data.items.find((i) => i.id === c.itemId);
+      return !target || target.locked || target.body !== c.before;
+    };
   return cs.length ? (
     <div className="stack">
       {cs.map((c) => (
@@ -653,14 +662,14 @@ function Review({ s }: { s: StudioController }) {
             disabled={
               s.busy ||
               s.dirty ||
-              c.baseRevision !== s.selected?.revision ||
+              stale(c) ||
               s.workspace?.role === "viewer"
             }
             onClick={() => s.apply(c.id)}
           >
             {labels[s.locale].apply}
           </Action>
-          {c.baseRevision !== s.selected?.revision && (
+          {stale(c) && (
             <small>
               {en
                 ? "This proposal targets an older revision."
