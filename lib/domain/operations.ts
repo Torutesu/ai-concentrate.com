@@ -253,7 +253,7 @@ export const operations = {
       })
       .strict(),
     description:
-      "Find the most relevant source passages (short excerpts with source IDs).",
+      "Find the most relevant source passages (short excerpts with source IDs). Sources excluded from AI are not searched for agents.",
     scope: "studio:read",
     readOnly: true,
   },

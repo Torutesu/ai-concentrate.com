@@ -1075,6 +1075,69 @@
         "components/studio/workspace-views.tsx": "5cde8cd129aa82bf243f59b196af4aec4f0d1e9794a26d64a730cacafb40fecd"
       },
       "verification": "tsc, lint (0 errors), 15 unit + 36x2 D1/libSQL tests, Next and Sites builds pass. No browser check of the changed interactions in this task."
+    },
+    "frontendCapabilities": {
+      "date": "2026-10-07",
+      "status": "figma-sync-blocked",
+      "figmaMutationRequired": true,
+      "figmaSync": "BLOCKED: the Figma MCP connector (plugin:figma:figma) is not authorized in this session, so the existing file could not be inspected or updated. No Figma node was created, changed or removed. Authorize the connector in claude.ai connector settings, then sync the pending targets below in place (preserve node IDs and designer explorations; do not rerun design/build-figma.js).",
+      "pendingTargets": [
+        {
+          "screen": "settings",
+          "nodeId": "89:10156",
+          "change": "Workspace section above Account: AI data policy panel (radio choice cards for source sending, agent apply permission, provider allow-list; owner-only editing), monthly AI usage panel (budget meter, runs, tokens, cache rate, estimated cost), brand profile panel (voice, glossary table, prohibited claims), danger zone with type-the-name delete dialog."
+        },
+        {
+          "screen": "context",
+          "nodeId": "89:9676",
+          "change": "Source rows: AI-exclusion badge, character count, 'Use as AI reference' checkbox, delete with confirmation, 'Show more' paging, 'Load more sources'; passage search box with highlighted excerpts; sensitive-data warning after import; policy note when sources are never sent."
+        },
+        {
+          "screen": "review",
+          "nodeId": "103:9643",
+          "change": "Status segmented control (open/applied/rejected/outdated) and 'Check for new proposals' button; decided-history list with expandable diff."
+        },
+        {
+          "screen": "reviewProposal",
+          "nodeId": "103:9754",
+          "change": "Proposal card replaces side-by-side textareas: item title/meta, origin chip (server AI model or connected agent), instruction and agent rationale, fact-warning callout, inline word diff with +/- counts and Result toggle, Apply and Reject actions."
+        },
+        {
+          "screen": "reviewStale",
+          "nodeId": "103:9874",
+          "change": "Blocked-reason text per cause (item removed, locked, text changed) under the actions."
+        },
+        {
+          "screen": "content",
+          "nodeId": "89:9427",
+          "change": "Export menu renamed 'Export & more' with a 'Delete idea' item and confirmation dialog; AI composer note reflects the source policy and excluded-source count."
+        },
+        {
+          "screen": "integrations",
+          "nodeId": "89:9951",
+          "change": "MCP card states the current agent permission with a link to change the policy; AI setup text names both OpenAI and Anthropic keys."
+        },
+        {
+          "component": "sidebar",
+          "nodeId": "89:9074",
+          "change": "Sidebar scrolls internally on short viewports so the account footer stays inside the panel (visible bug at 720px height)."
+        },
+        {
+          "component": "new shared",
+          "change": "Choice card (radio), danger button, confirm dialog with typed confirmation, inline warning/note callouts, segmented control, diff insert/delete tokens."
+        }
+      ],
+      "sourceHashes": {
+        "components/studio/settings.tsx": "cfa65e0d07d70fd12a6ca4589c78f4e9e6b928c6c2077760ea2f7b5ec2729f4b",
+        "components/studio/proposals.tsx": "8180c7d3e690732b7c7368baf479f1ecd53060061904e93f9fa809cf5db632b1",
+        "components/studio/workspace-views.tsx": "8af2c928cbaa07d2679a666c89f778e592d3fc9c1a186478123bd22c7c820bd8",
+        "components/studio/editor.tsx": "34cd7e3acc4bbc0b01b057d4bcd717261f9b0f7a7a880e79f5aa232e72804759",
+        "components/studio/ui.tsx": "52d7047cadaaeff58dd916428a98ef50e08975508e457d2f3ddb59cf83604299",
+        "components/studio/use-studio.ts": "5b59f321522d690676333da661092ad117c635f9ac9567fec7fc4fc6f7453068",
+        "components/studio/errors.ts": "f55c78dcd5a83f40837ee822f4134bb0ed9c6144ab9bb2155996d8324b64aa1a",
+        "app/globals.css": "44ad66006feb591757384000b8eb086f227da0b5c1530664cb8c163a48122b75"
+      },
+      "verification": "tsc clean; ESLint 0 errors; 21 unit + 36x2 D1/libSQL tests; Next and Sites builds; scripts/check-sites-bundle.mjs; browser E2E scripts/e2e/run.sh 15/15 on local Sites Worker + D1 (ja 1440px, en 390px, owner and editor roles). Screenshots are local QA evidence only and are not embedded in Figma."
     }
   },
   "workspaceSwitcher": {

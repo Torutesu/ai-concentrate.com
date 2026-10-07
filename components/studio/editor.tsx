@@ -1,18 +1,22 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { NoIdea } from "./workflow";
-import { Download, Plus, Sparkles, FileText, Clapperboard } from "lucide-react";
 import {
-  productionSchema,
-  type Change,
-  type ContentItem,
-} from "../../lib/domain/models";
+  Download,
+  Plus,
+  Sparkles,
+  FileText,
+  Clapperboard,
+  Trash2,
+} from "lucide-react";
+import { productionSchema, type ContentItem } from "../../lib/domain/models";
 import { productionMarkdown } from "../../lib/domain/export";
 import { History } from "./history";
+import { Proposals } from "./proposals";
 import { ProductionSearch } from "./production-search";
 import type { StudioController } from "./use-studio";
 import { labels, type Tab } from "./i18n";
-import { Action, Badge, Empty, Field, Panel } from "./ui";
+import { Action, Badge, ConfirmDialog, Empty, Field, Panel } from "./ui";
 const tabs: Tab[] = [
   "plan",
   "draft",
@@ -33,7 +37,8 @@ export function Editor({ s }: { s: StudioController }) {
     [outputLocale, setOutputLocale] = useState<"ja" | "en">("ja"),
     [instruction, setInstruction] = useState(""),
     [aspect, setAspect] = useState("16:9"),
-    [preview, setPreview] = useState(false);
+    [preview, setPreview] = useState(false),
+    [confirmDelete, setConfirmDelete] = useState(false);
   const exportMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
@@ -58,6 +63,15 @@ export function Editor({ s }: { s: StudioController }) {
   }, []);
   const p = s.draft,
     canEdit = s.workspace?.role !== "viewer" && !s.busy;
+  const excluded = s.sources.filter((x) => x.aiExcluded).length,
+    aiSourceNote =
+      s.settings?.settings.policy.sendSources === "none"
+        ? en
+          ? "Workspace policy: sources are not sent. AI uses the brief, brand profile and this item."
+          : "ポリシーにより資料は送りません。ブリーフ・ブランドプロフィール・この項目だけで変更案を作ります。"
+        : en
+          ? `Relevant passages from sources are sent with keys and contact data masked${excluded ? ` (${excluded} excluded)` : ""}. The result is a proposal you review.`
+          : `資料の関連部分を、キー・連絡先を伏せてAIに渡します${excluded ? `（${excluded}件は除外）` : ""}。結果は確認用の変更案になります。`;
   const kinds: Partial<Record<Tab, ContentItem["kind"]>> = {
     draft: "draft",
     x: "x",
@@ -197,13 +211,25 @@ export function Editor({ s }: { s: StudioController }) {
               <details className="export-menu" ref={exportMenu}>
                 <summary className="btn">
                   <Download size={15} />
-                  {en ? "Export" : "書き出す"}
+                  {en ? "Export & more" : "書き出し・その他"}
                 </summary>
                 <div className="export-options">
                   <Action onClick={() => download("md")}>Markdown</Action>
                   <Action onClick={() => download("json")}>
                     {en ? "JSON backup" : "JSONバックアップ"}
                   </Action>
+                  {canEdit && (
+                    <Action
+                      className="danger subtle"
+                      onClick={() => {
+                        if (exportMenu.current) exportMenu.current.open = false;
+                        setConfirmDelete(true);
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      {en ? "Delete idea" : "企画を削除"}
+                    </Action>
+                  )}
                 </div>
               </details>
               <label className="compact-select">
@@ -310,7 +336,7 @@ export function Editor({ s }: { s: StudioController }) {
               </Panel>
             </fieldset>
           ) : s.tab === "review" ? (
-            <Review s={s} />
+            <Proposals s={s} />
           ) : s.tab === "updates" ? (
             <History s={s} />
           ) : s.tab === "assets" ? (
@@ -601,9 +627,7 @@ export function Editor({ s }: { s: StudioController }) {
                             ? en
                               ? "AI provider configuration required."
                               : "AI生成はサーバー設定待ちです。"
-                            : en
-                              ? "Sources from this workspace are sent to the AI provider."
-                              : "このワークスペースの資料をAIに渡し、変更案を作成します。"}
+                            : aiSourceNote}
                       </small>
                     </div>
                   </>
@@ -613,6 +637,28 @@ export function Editor({ s }: { s: StudioController }) {
           )}
         </>
       )}
+      <ConfirmDialog
+        open={confirmDelete}
+        busy={s.busy}
+        title={en ? `Delete “${p?.title}”?` : `「${p?.title}」を削除しますか？`}
+        description={
+          <p>
+            {en
+              ? "All channel drafts, revision history and proposals for this idea are permanently deleted. Download a JSON backup first if you may need it."
+              : "この企画の媒体別原稿・編集履歴・変更案をすべて完全に削除します。必要ならJSONバックアップを先に書き出してください。"}
+            {s.dirty &&
+              (en
+                ? " Unsaved edits are discarded."
+                : " 未保存の編集内容も破棄されます。")}
+          </p>
+        }
+        confirmLabel={en ? "Delete idea" : "削除する"}
+        cancelLabel={en ? "Cancel" : "キャンセル"}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          if (await s.deleteProduction()) setConfirmDelete(false);
+        }}
+      />
       {preview && (
         <ReferenceDialog
           en={en}
@@ -622,74 +668,6 @@ export function Editor({ s }: { s: StudioController }) {
         />
       )}
     </>
-  );
-}
-function Review({ s }: { s: StudioController }) {
-  const en = s.locale === "en",
-    cs = s.changes.filter((c) => c.productionId === s.selected?.id),
-    // A proposal stays applicable while its target text is unchanged.
-    stale = (c: Change) => {
-      const target = s.selected?.data.items.find((i) => i.id === c.itemId);
-      return !target || target.locked || target.body !== c.before;
-    };
-  return cs.length ? (
-    <div className="stack">
-      {cs.map((c) => (
-        <Panel key={c.id}>
-          <div className="identity">
-            <h2>{en ? "Review change" : "変更内容を確認"}</h2>
-            <Badge>
-              {c.itemId} / v{c.baseRevision}
-            </Badge>
-          </div>
-          <div className="two-col">
-            <Field
-              label={en ? "Current" : "現在"}
-              multiline
-              value={c.before}
-              readOnly
-            />
-            <Field
-              label={en ? "Proposal" : "変更案"}
-              multiline
-              value={c.after}
-              readOnly
-            />
-          </div>
-          <p className="muted">{c.instruction}</p>
-          <Action
-            primary
-            disabled={
-              s.busy ||
-              s.dirty ||
-              stale(c) ||
-              s.workspace?.role === "viewer"
-            }
-            onClick={() => s.apply(c.id)}
-          >
-            {labels[s.locale].apply}
-          </Action>
-          {stale(c) && (
-            <small>
-              {en
-                ? "This proposal targets an older revision."
-                : "この変更案の元の版は古くなっています。"}
-            </small>
-          )}
-        </Panel>
-      ))}
-    </div>
-  ) : (
-    <Empty title={en ? "No proposals" : "変更案はまだありません"}>
-      <p>
-        {en
-          ? "Generate a revision from a saved item."
-          : "保存した原稿やシーンから変更案を生成できます。"}
-      </p>
-      <Action onClick={() => s.setTab("draft")}>
-        {en ? "Open draft" : "原稿を開く"}
-      </Action>
-    </Empty>
   );
 }
 function ReferenceDialog({

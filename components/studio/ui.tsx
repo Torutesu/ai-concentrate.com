@@ -1,5 +1,11 @@
-import type { ComponentProps, ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "../ui/dialog";
 export function Action({
   primary,
   className = "",
@@ -60,5 +66,92 @@ export function Empty({
       <h2>{title}</h2>
       <div className="muted">{children}</div>
     </Panel>
+  );
+}
+/**
+ * Confirmation for destructive actions. With `confirmText`, the person must
+ * type it (e.g. the workspace name) before the action is enabled.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  confirmText,
+  typePrompt,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  description: ReactNode;
+  confirmLabel: string;
+  cancelLabel: string;
+  confirmText?: string;
+  typePrompt?: string;
+  busy?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const ready = !confirmText || typed.trim() === confirmText.trim();
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!value && !busy) {
+          setTyped("");
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        className="workspace-dialog confirm-dialog"
+        showCloseButton={false}
+        onEscapeKeyDown={(e) => {
+          if (busy) e.preventDefault();
+        }}
+      >
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription asChild>
+          <div>{description}</div>
+        </DialogDescription>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ready && !busy) onConfirm();
+          }}
+        >
+          {confirmText && (
+            <label className="workspace-name-label">
+              {typePrompt}
+              <input
+                value={typed}
+                autoComplete="off"
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder={confirmText}
+              />
+            </label>
+          )}
+          <div className="workspace-dialog-actions">
+            <Action
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setTyped("");
+                onClose();
+              }}
+            >
+              {cancelLabel}
+            </Action>
+            <Action type="submit" className="danger" disabled={busy || !ready}>
+              {confirmLabel}
+            </Action>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

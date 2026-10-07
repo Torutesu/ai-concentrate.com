@@ -51,14 +51,19 @@ export default defineConfig(async ({ command }) => {
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
+  const sitesRuntime = new URL("./lib/platform/sites.ts", import.meta.url)
+    .pathname;
+  const vercelPath = new URL("./lib/platform/runtime", import.meta.url)
+    .pathname;
+  // The framework may rewrite `@/` imports to absolute paths before resolution.
+  const vercelRuntime = new Set([
+    "@/lib/platform/runtime",
+    vercelPath,
+    `${vercelPath}.ts`,
+  ]);
   return {
     resolve: {
-      alias: {
-        "@/lib/platform/runtime": new URL(
-          "./lib/platform/sites.ts",
-          import.meta.url,
-        ).pathname,
-      },
+      alias: { "@/lib/platform/runtime": sitesRuntime },
     },
     server: {
       ...(managedLinux
@@ -69,6 +74,16 @@ export default defineConfig(async ({ command }) => {
         : {}),
     },
     plugins: [
+      // `resolve.alias` alone is bypassed because the framework rewrites `@/`
+      // to absolute paths first, which silently bundled the Vercel (Clerk)
+      // runtime into the Sites Worker. Resolve both forms before anything else.
+      {
+        name: "sites-platform-runtime",
+        enforce: "pre",
+        resolveId(id: string) {
+          if (vercelRuntime.has(id)) return sitesRuntime;
+        },
+      },
       vinext(),
       sites({ mockAuth: !managedLinux }),
       connectorPreview(),

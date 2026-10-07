@@ -302,10 +302,13 @@ export class StudioService {
   }
   async searchSources(workspaceId: string, query: string, limit: number) {
     await this.repository.role(workspaceId, this.actorId);
+    // Exclusion governs what reaches AI: agents never discover excluded
+    // sources through search, while people search their whole library.
     const hits = await this.repository.searchChunks(
       workspaceId,
       ftsPhrase(query),
       limit,
+      this.actor.channel === "web",
     );
     return {
       results: hits.map((h) => {

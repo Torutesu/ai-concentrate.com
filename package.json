@@ -17,7 +17,8 @@
     "dev:vercel": "next dev --port 3000",
     "typecheck": "tsc --noEmit",
     "db:migrate:libsql": "node scripts/migrate-libsql.mjs",
-    "eval": "node scripts/eval.mjs"
+    "eval": "node scripts/eval.mjs",
+    "check:sites": "node scripts/check-sites-bundle.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

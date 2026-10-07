@@ -9,15 +9,21 @@ import {
   BarChart3,
   Video,
   Terminal,
+  Search,
+  Trash2,
 } from "lucide-react";
+import { operation } from "../../lib/studio-client";
+import { errorMessage } from "./errors";
+import { WorkspaceSettingsPanels } from "./settings";
 import { LanguageSwitcher } from "./language-switcher";
-import type { StudioController } from "./use-studio";
+import type { LoadedSource, StudioController } from "./use-studio";
 import { labels } from "./i18n";
-import { Action, Badge, Field, Panel } from "./ui";
+import { Action, Badge, ConfirmDialog, Field, Panel } from "./ui";
 export function Context({ s }: { s: StudioController }) {
   const en = s.locale === "en",
     { name, kind, reference, body } = s.sourceDraft;
-  const [fileError, setFileError] = useState("");
+  const [fileError, setFileError] = useState(""),
+    [sensitive, setSensitive] = useState<string[]>([]);
   const setName = (name: string) => s.updateSourceDraft({ name }),
     setKind = (kind: "markdown" | "url" | "repository") =>
       s.updateSourceDraft({ kind }),
@@ -62,6 +68,7 @@ export function Context({ s }: { s: StudioController }) {
               setName("");
               setReference("");
               setBody("");
+              setSensitive(result.sensitive ?? []);
             }
           }}
         >
@@ -117,6 +124,27 @@ export function Context({ s }: { s: StudioController }) {
               {body.length.toLocaleString()} / 60,000
             </small>
             {fileError && <p role="alert">{fileError}</p>}
+            {sensitive.length > 0 && (
+              <div className="inline-warning" role="alert">
+                <strong>
+                  {en
+                    ? "The saved source contains sensitive data"
+                    : "保存した資料に機微な情報が含まれています"}
+                </strong>
+                <p>
+                  {en
+                    ? `Detected: ${sensitive.map((k) => SENSITIVE_LABELS[k]?.[1] ?? k).join(", ")}. These are masked before any AI request, but they are stored as written. Delete the source and re-add it without them if they should not be stored.`
+                    : `検出：${sensitive.map((k) => SENSITIVE_LABELS[k]?.[0] ?? k).join("、")}。AIに送る前に自動で伏せますが、資料には入力どおり保存されています。保存すべきでない場合は、資料を削除し、除いてから追加し直してください。`}
+                </p>
+                <button
+                  type="button"
+                  className="text-action"
+                  onClick={() => setSensitive([])}
+                >
+                  {en ? "Dismiss" : "閉じる"}
+                </button>
+              </div>
+            )}
             <Action
               primary
               disabled={!name.trim() || !body.trim() || body.length > 60000}
@@ -126,50 +154,259 @@ export function Context({ s }: { s: StudioController }) {
           </fieldset>
         </form>
       </Panel>
-      <Panel>
-        <div className="section-heading">
-          <h2>{en ? "Workspace sources" : "登録済みの資料"}</h2>
-          {s.sources.length > 0 && (
-            <Action
-              disabled={s.busy || (!s.draft && s.workspace?.role === "viewer")}
-              onClick={async () => {
-                if (s.draft || (await s.createProduction()))
-                  s.setView("strategy");
-              }}
-            >
-              {en ? "Continue to brief" : "企画へ進む"}
-              <ArrowRight size={14} />
-            </Action>
-          )}
-        </div>
-        {s.sources.length ? (
-          s.sources.map((source) => (
+      <SourceLibrary s={s} />
+    </div>
+  );
+}
+const SENSITIVE_LABELS: Record<string, [string, string]> = {
+  api_key: ["APIキー", "API keys"],
+  token: ["認証トークン", "access tokens"],
+  private_key: ["秘密鍵", "private keys"],
+  email: ["メールアドレス", "email addresses"],
+  phone: ["電話番号", "phone numbers"],
+};
+function SourceLibrary({ s }: { s: StudioController }) {
+  const en = s.locale === "en",
+    canEdit = s.workspace?.role !== "viewer",
+    [pendingDelete, setPendingDelete] = useState<LoadedSource | null>(null),
+    excludedAll = s.settings?.settings.policy.sendSources === "none";
+  return (
+    <Panel>
+      <div className="section-heading">
+        <h2>{en ? "Workspace sources" : "登録済みの資料"}</h2>
+        {s.sources.length > 0 && (
+          <Action
+            disabled={s.busy || (!s.draft && !canEdit)}
+            onClick={async () => {
+              if (s.draft || (await s.createProduction()))
+                s.setView("strategy");
+            }}
+          >
+            {en ? "Continue to brief" : "企画へ進む"}
+            <ArrowRight size={14} />
+          </Action>
+        )}
+      </div>
+      {excludedAll && (
+        <p className="inline-note" role="status">
+          {en
+            ? "Workspace policy: sources are never sent to AI. "
+            : "ワークスペースのポリシーにより、資料はAIに送られません。"}
+          <button
+            type="button"
+            className="text-action"
+            onClick={() => s.setView("settings")}
+          >
+            {en ? "Change in Settings" : "設定で変更"}
+          </button>
+        </p>
+      )}
+      {s.sources.length > 0 && <SourceSearch s={s} />}
+      {s.sources.length ? (
+        <>
+          {s.sources.map((source) => (
             <details
               key={source.id}
               className="source-detail"
               onToggle={(e) => {
-                if (e.currentTarget.open) void s.loadSource(source.id);
+                if (e.currentTarget.open && source.body === undefined)
+                  void s.loadSource(source.id);
               }}
             >
               <summary>
-                {source.name} <Badge>{source.kind}</Badge>
+                <span className="source-name">{source.name}</span>
+                <Badge>{source.kind}</Badge>
+                {source.aiExcluded && (
+                  <Badge>{en ? "Not sent to AI" : "AIに送らない"}</Badge>
+                )}
+                <small className="source-meta">
+                  {source.chars.toLocaleString(s.locale)}
+                  {en ? " chars" : "文字"}
+                </small>
               </summary>
-              <p className="muted">{source.reference}</p>
+              {source.reference && (
+                <p className="muted source-reference">{source.reference}</p>
+              )}
               <pre>{source.body ?? source.preview}</pre>
-              <small>
-                {new Date(source.createdAt).toLocaleString(s.locale)}
-              </small>
+              {source.truncated && source.body === undefined ? (
+                <p className="muted" role="status">
+                  {en ? "Loading the full text…" : "全文を読み込み中…"}
+                </p>
+              ) : (
+                source.nextOffset != null && (
+                  <Action
+                    disabled={s.busy}
+                    onClick={() => void s.loadSource(source.id)}
+                  >
+                    {en ? "Show more" : "続きを表示"}
+                  </Action>
+                )
+              )}
+              <div className="source-actions">
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    disabled={!canEdit || s.busy}
+                    checked={!source.aiExcluded}
+                    onChange={(e) =>
+                      void s.setSourceAiExcluded(source.id, !e.target.checked)
+                    }
+                  />
+                  {en ? "Use as AI reference" : "AIの参照に使う"}
+                </label>
+                <small className="muted">
+                  {new Date(source.createdAt).toLocaleString(s.locale)}
+                </small>
+                {canEdit && (
+                  <Action
+                    className="danger subtle"
+                    disabled={s.busy}
+                    onClick={() => setPendingDelete(source)}
+                  >
+                    <Trash2 size={14} />
+                    {en ? "Delete" : "削除"}
+                  </Action>
+                )}
+              </div>
             </details>
-          ))
-        ) : (
-          <p className="muted">
+          ))}
+          {s.sourceCursor && (
+            <Action disabled={s.busy} onClick={() => void s.loadMoreSources()}>
+              {en ? "Load more sources" : "さらに資料を読み込む"}
+            </Action>
+          )}
+        </>
+      ) : (
+        <p className="muted">
+          {en
+            ? "Add product facts and brand guidelines here."
+            : "製品情報やブランドの方針を追加してください。"}
+        </p>
+      )}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        busy={s.busy}
+        title={
+          en
+            ? `Delete “${pendingDelete?.name}”?`
+            : `「${pendingDelete?.name}」を削除しますか？`
+        }
+        description={
+          <p>
             {en
-              ? "Add product facts and brand guidelines here."
-              : "製品情報やブランドの方針を追加してください。"}
+              ? "The text and its search index are removed permanently. Existing drafts and proposals are not changed."
+              : "本文と検索用の索引を完全に削除します。作成済みの原稿や変更案は変わりません。"}
           </p>
-        )}
-      </Panel>
+        }
+        confirmLabel={en ? "Delete source" : "削除する"}
+        cancelLabel={en ? "Cancel" : "キャンセル"}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (pendingDelete && (await s.deleteSource(pendingDelete.id)))
+            setPendingDelete(null);
+        }}
+      />
+    </Panel>
+  );
+}
+function SourceSearch({ s }: { s: StudioController }) {
+  const en = s.locale === "en",
+    [query, setQuery] = useState(""),
+    [state, setState] = useState<
+      | { kind: "idle" }
+      | { kind: "loading" }
+      | { kind: "error"; message: string }
+      | {
+          kind: "done";
+          query: string;
+          results: { sourceId: string; chunk: number; excerpt: string }[];
+        }
+    >({ kind: "idle" });
+  const valid = query.trim().length >= 3;
+  async function search() {
+    if (!valid) return;
+    setState({ kind: "loading" });
+    try {
+      const r = await operation("context_search", {
+        workspaceId: s.workspaceId,
+        query: query.trim(),
+        limit: 5,
+      });
+      setState({ kind: "done", query: query.trim(), results: r.results });
+    } catch (e) {
+      setState({ kind: "error", message: errorMessage(e, s.locale) });
+    }
+  }
+  return (
+    <div className="source-search">
+      <form
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void search();
+        }}
+      >
+        <label className="sr-only" htmlFor="source-search-input">
+          {en ? "Search passages in sources" : "資料の中を検索"}
+        </label>
+        <Search size={15} aria-hidden="true" />
+        <input
+          id="source-search-input"
+          type="search"
+          value={query}
+          maxLength={200}
+          placeholder={
+            en
+              ? "Find a passage (3+ characters)"
+              : "資料の中を検索（3文字以上）"
+          }
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <Action disabled={!valid || state.kind === "loading"}>
+          {en ? "Search" : "検索"}
+        </Action>
+      </form>
+      {state.kind === "loading" && (
+        <p className="muted" role="status">
+          {en ? "Searching…" : "検索中…"}
+        </p>
+      )}
+      {state.kind === "error" && <p role="alert">{state.message}</p>}
+      {state.kind === "done" && (
+        <div role="status" aria-live="polite">
+          {state.results.length ? (
+            <ol className="passage-list">
+              {state.results.map((r) => (
+                <li key={`${r.sourceId}#${r.chunk}`}>
+                  <strong>
+                    {s.sources.find((x) => x.id === r.sourceId)?.name ??
+                      (en ? "Source" : "資料")}
+                  </strong>
+                  <p>{highlight(r.excerpt, state.query)}</p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="muted">
+              {en
+                ? `No passage contains “${state.query}”.`
+                : `「${state.query}」を含む箇所はありません。`}
+            </p>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+function highlight(text: string, query: string) {
+  const at = text.indexOf(query);
+  if (at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark>{text.slice(at, at + query.length)}</mark>
+      {text.slice(at + query.length)}
+    </>
   );
 }
 export function Strategy({ s }: { s: StudioController }) {
@@ -357,90 +594,113 @@ export function Calendar({ s }: { s: StudioController }) {
             : "公開予定 · 自動投稿は未接続"}
         </Badge>
       </div>
-      <div className="calendar-workbench"><Panel className="calendar-month">
-        <div
-          className="calendar-grid"
-          role="group"
-          aria-label={en ? "Monthly calendar" : "月間カレンダー"}
-        >
-          {(en
-            ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            : ["月", "火", "水", "木", "金", "土", "日"]
-          ).map((d) => (
-            <strong className="weekday" key={d}>
-              {d}
-            </strong>
-          ))}
-          {Array.from(
-            { length: Math.ceil((offset + last) / 7) * 7 },
-            (_, i) => {
-              const n = i - offset + 1,
-                date = `${year}-${String(m + 1).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
-              return n < 1 || n > last ? (
-                <div className="calendar-cell outside" key={i} />
-              ) : (
-                <div
-                  className={`calendar-cell ${day === date ? "selected" : ""}`}
-                  key={i}
-                >
-                  <button
-                    className="day-number"
-                    aria-label={date}
-                    aria-pressed={day === date}
-                    onClick={() => setDay(date)}
+      <div className="calendar-workbench">
+        <Panel className="calendar-month">
+          <div
+            className="calendar-grid"
+            role="group"
+            aria-label={en ? "Monthly calendar" : "月間カレンダー"}
+          >
+            {(en
+              ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+              : ["月", "火", "水", "木", "金", "土", "日"]
+            ).map((d) => (
+              <strong className="weekday" key={d}>
+                {d}
+              </strong>
+            ))}
+            {Array.from(
+              { length: Math.ceil((offset + last) / 7) * 7 },
+              (_, i) => {
+                const n = i - offset + 1,
+                  date = `${year}-${String(m + 1).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
+                return n < 1 || n > last ? (
+                  <div className="calendar-cell outside" key={i} />
+                ) : (
+                  <div
+                    className={`calendar-cell ${day === date ? "selected" : ""}`}
+                    key={i}
                   >
-                    {n}
-                  </button>
-                  {s.productions
-                    .filter(
-                      (p) =>
-                        (p.id === s.selected?.id
-                          ? s.draft?.plannedDate
-                          : p.plannedDate) === date,
-                    )
-                    .map((p) => (
-                      <button
-                        className="calendar-event"
-                        key={p.id}
-                        onClick={() => {
-                          setDay(date);
-                          s.select(p.id);
-                        }}
-                      >
-                        {p.title}
-                      </button>
-                    ))}
-                </div>
-              );
-            },
-          )}
-        </div>
-      </Panel>
-      <Panel className="calendar-plan">
-        <h2>{day || (en ? "Plan a publication date" : "公開予定を決める")}</h2>
-        {!s.draft ? <NoIdea s={s} /> : <IdeaPicker s={s} />}
-        {s.draft && (
-          <fieldset disabled={s.busy || s.workspace?.role === "viewer"}>
-            <Field
-              label={en ? "Planned date" : "公開予定日"}
-              type="date"
-              value={s.draft.plannedDate}
-              onChange={(e) => s.patch({ plannedDate: e.target.value })}
-            />
-            <Field label={en ? "Destination URL" : "誘導先URL"} type="url" value={s.draft.destination} onChange={e=>s.patch({destination:e.target.value})}/>
-            <Field label={en ? "Success metric" : "評価指標"} placeholder={en ? "e.g. activated users from this campaign" : "例：この施策から初回の価値体験に到達した人数"} value={s.draft.metric} onChange={e=>s.patch({metric:e.target.value})}/>
-            <Field label={en ? "Review date" : "評価日"} type="date" value={s.draft.evaluationDate} onChange={e=>s.patch({evaluationDate:e.target.value})}/>
-            {day && (
-              <Action
-                disabled={s.draft.plannedDate === day}
-                onClick={() => s.patch({ plannedDate: day })}
-              >
-                {en ? "Use selected date" : "選択した日付を使う"}
-              </Action>
+                    <button
+                      className="day-number"
+                      aria-label={date}
+                      aria-pressed={day === date}
+                      onClick={() => setDay(date)}
+                    >
+                      {n}
+                    </button>
+                    {s.productions
+                      .filter(
+                        (p) =>
+                          (p.id === s.selected?.id
+                            ? s.draft?.plannedDate
+                            : p.plannedDate) === date,
+                      )
+                      .map((p) => (
+                        <button
+                          className="calendar-event"
+                          key={p.id}
+                          onClick={() => {
+                            setDay(date);
+                            s.select(p.id);
+                          }}
+                        >
+                          {p.title}
+                        </button>
+                      ))}
+                  </div>
+                );
+              },
             )}
-          </fieldset>
-        )}
-      </Panel></div>
+          </div>
+        </Panel>
+        <Panel className="calendar-plan">
+          <h2>
+            {day || (en ? "Plan a publication date" : "公開予定を決める")}
+          </h2>
+          {!s.draft ? <NoIdea s={s} /> : <IdeaPicker s={s} />}
+          {s.draft && (
+            <fieldset disabled={s.busy || s.workspace?.role === "viewer"}>
+              <Field
+                label={en ? "Planned date" : "公開予定日"}
+                type="date"
+                value={s.draft.plannedDate}
+                onChange={(e) => s.patch({ plannedDate: e.target.value })}
+              />
+              <Field
+                label={en ? "Destination URL" : "誘導先URL"}
+                type="url"
+                value={s.draft.destination}
+                onChange={(e) => s.patch({ destination: e.target.value })}
+              />
+              <Field
+                label={en ? "Success metric" : "評価指標"}
+                placeholder={
+                  en
+                    ? "e.g. activated users from this campaign"
+                    : "例：この施策から初回の価値体験に到達した人数"
+                }
+                value={s.draft.metric}
+                onChange={(e) => s.patch({ metric: e.target.value })}
+              />
+              <Field
+                label={en ? "Review date" : "評価日"}
+                type="date"
+                value={s.draft.evaluationDate}
+                onChange={(e) => s.patch({ evaluationDate: e.target.value })}
+              />
+              {day && (
+                <Action
+                  disabled={s.draft.plannedDate === day}
+                  onClick={() => s.patch({ plannedDate: day })}
+                >
+                  {en ? "Use selected date" : "選択した日付を使う"}
+                </Action>
+              )}
+            </fieldset>
+          )}
+        </Panel>
+      </div>
     </>
   );
 }
@@ -558,8 +818,8 @@ export function Integrations({ s }: { s: StudioController }) {
                     </summary>
                     <p>
                       {en
-                        ? "Configure OPENAI_API_KEY and OPENAI_MODEL in the hosting environment, then redeploy. Never paste keys into product sources."
-                        : "ホスティング環境でOPENAI_API_KEYとOPENAI_MODELを設定して再デプロイしてください。キーは製品資料に貼り付けないでください。"}
+                        ? "Configure OPENAI_API_KEY and OPENAI_MODEL, and/or ANTHROPIC_API_KEY, in the hosting environment, then redeploy. Never paste keys into product sources."
+                        : "ホスティング環境でOPENAI_API_KEYとOPENAI_MODEL、またはANTHROPIC_API_KEY（両方も可）を設定して再デプロイしてください。キーは製品資料に貼り付けないでください。"}
                     </p>
                   </details>
                 )
@@ -571,6 +831,30 @@ export function Integrations({ s }: { s: StudioController }) {
                   {en
                     ? "The MCP endpoint is /mcp on this deployment. Use your host’s supported authentication; an endpoint alone does not grant access."
                     : "接続先はこのデプロイ先の /mcp です。ホストが対応する認証を使用してください。URLだけではアクセス権は付与されません。"}
+                </p>
+                <p>
+                  {en ? "Agents may: " : "エージェントに許可している操作："}
+                  <strong>
+                    {s.settings?.settings.policy.agentApply === "any"
+                      ? en
+                        ? "read, propose and apply any proposal"
+                        : "読み取り・提案・すべての提案の適用"
+                      : s.settings?.settings.policy.agentApply ===
+                          "own_proposals"
+                        ? en
+                          ? "read, propose and apply their own proposals"
+                          : "読み取り・提案・自分の提案の適用"
+                        : en
+                          ? "read and propose (people apply)"
+                          : "読み取りと提案（適用は人が行う）"}
+                  </strong>{" "}
+                  <button
+                    type="button"
+                    className="text-action"
+                    onClick={() => s.setView("settings")}
+                  >
+                    {en ? "Change policy" : "ポリシーを変更"}
+                  </button>
                 </p>
               </details>
             )}
@@ -590,47 +874,58 @@ export function SettingsView({
   const en = s.locale === "en",
     [name, setName] = useState("");
   return (
-    <div className="two-col">
-      <Panel>
-        <h2>{en ? "Account" : "アカウント"}</h2>
-        <p>{user.name}</p>
-        <p className="muted">{user.email}</p>
-        <Badge>{en ? "Signed in" : "ログイン済み"}</Badge>
-        <LanguageSwitcher
-          locale={s.locale}
-          onChange={s.setLocale}
-          variant="settings"
-        />
-        <p className="muted">
-          {en
-            ? "Team invites and billing are not enabled in this private version."
-            : "この非公開版では、チーム招待と課金は未接続です。"}
-        </p>
-      </Panel>
-      <Panel>
-        <h2>{en ? "New workspace" : "ワークスペースを追加"}</h2>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            await s.createWorkspace(name);
-          }}
-        >
-          <Field
-            label={en ? "Product or brand name" : "製品・ブランド名"}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+    <>
+      {s.workspace && (
+        <h2 className="settings-section-title">
+          {en ? "Workspace" : "ワークスペース"} · {s.workspace.name}
+        </h2>
+      )}
+      <WorkspaceSettingsPanels s={s} />
+      <h2 className="settings-section-title">
+        {en ? "Account" : "アカウント"}
+      </h2>
+      <div className="two-col">
+        <Panel>
+          <h2>{en ? "Account" : "アカウント"}</h2>
+          <p>{user.name}</p>
+          <p className="muted">{user.email}</p>
+          <Badge>{en ? "Signed in" : "ログイン済み"}</Badge>
+          <LanguageSwitcher
+            locale={s.locale}
+            onChange={s.setLocale}
+            variant="settings"
           />
-          <Action primary disabled={s.busy || !name.trim()}>
-            {labels[s.locale].create}
-          </Action>
-        </form>
-        <p className="muted">
-          {en
-            ? "Sources and drafts are isolated per workspace."
-            : "資料と原稿はワークスペースごとに分離されます。"}
-        </p>
-      </Panel>
-    </div>
+          <p className="muted">
+            {en
+              ? "Team invites and billing are not enabled in this private version."
+              : "この非公開版では、チーム招待と課金は未接続です。"}
+          </p>
+        </Panel>
+        <Panel>
+          <h2>{en ? "New workspace" : "ワークスペースを追加"}</h2>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await s.createWorkspace(name);
+            }}
+          >
+            <Field
+              label={en ? "Product or brand name" : "製品・ブランド名"}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Action primary disabled={s.busy || !name.trim()}>
+              {labels[s.locale].create}
+            </Action>
+          </form>
+          <p className="muted">
+            {en
+              ? "Sources and drafts are isolated per workspace."
+              : "資料と原稿はワークスペースごとに分離されます。"}
+          </p>
+        </Panel>
+      </div>
+    </>
   );
 }
 function IdeaPicker({ s }: { s: StudioController }) {

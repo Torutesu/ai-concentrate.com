@@ -622,17 +622,26 @@ export class Repository implements ContextStore {
         .bind(chunks.length, workspaceId, sourceId),
     ]);
   }
-  async searchChunks(workspaceId: string, match: string, limit: number) {
+  /**
+   * Ranked passages. AI-excluded sources are skipped unless
+   * `includeAiExcluded` (people searching their own library see everything).
+   */
+  async searchChunks(
+    workspaceId: string,
+    match: string,
+    limit: number,
+    includeAiExcluded = false,
+  ) {
     return (
       await this.db
         .prepare(
           `SELECT c.id,c.source_id AS sourceId,c.ordinal,c.body FROM source_chunks_fts
              JOIN source_chunks c ON c.id=source_chunks_fts.rowid
              JOIN sources s ON s.id=c.source_id
-            WHERE source_chunks_fts MATCH ? AND c.workspace_id=? AND s.ai_excluded=0
+            WHERE source_chunks_fts MATCH ? AND c.workspace_id=? AND (s.ai_excluded=0 OR ?)
             ORDER BY bm25(source_chunks_fts) LIMIT ?`,
         )
-        .bind(match, workspaceId, limit)
+        .bind(match, workspaceId, includeAiExcluded ? 1 : 0, limit)
         .all<RetrievedChunk>()
     ).results;
   }

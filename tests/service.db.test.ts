@@ -533,6 +533,16 @@ test("source listing carries previews only; text is read in ranges and searched"
     body: "token sk-proj-abcdefghijklmnopqrstuvwxyz012345",
   });
   assert.deepEqual(secret.sensitive, ["api_key"]);
+  // Excluding a source keeps it out of AI and agent search, not the owner's.
+  await owner.updateSource("src", added.id, true);
+  assert.equal(
+    (await owner.searchSources("src", "XYZZY", 5)).results[0].sourceId,
+    added.id,
+  );
+  const bot = new StudioService(repo, agent("alice"));
+  assert.equal((await bot.searchSources("src", "XYZZY", 5)).results.length, 0);
+  await owner.updateSource("src", added.id, false);
+  assert.equal((await bot.searchSources("src", "XYZZY", 5)).results.length, 1);
   await owner.deleteSource("src", added.id);
   assert.equal(
     (await owner.searchSources("src", "XYZZY", 5)).results.length,

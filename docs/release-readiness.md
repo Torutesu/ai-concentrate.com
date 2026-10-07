@@ -59,3 +59,28 @@ Implements the non-UI review (`docs/reviews/2026-10-03-non-ui-design-review.md`,
 - Proposal lifecycle (proposed/applied/rejected/stale) with three-way apply; agent scopes, policy-gated agent apply, audit events; MCP prompts, actionable tool errors, compact responses, `item_patch`/`brief_patch`/`change_propose`; Clerk OAuth token acceptance and RFC 9728 metadata on Vercel.
 - CI workflow, eval harness (7 fixed cases), AGENTS.md invariants.
 Evidence: `tsc` clean; ESLint 0 errors; 15 unit tests and 36 database tests on each of Miniflare D1 and libSQL pass; Next and Sites builds pass; unauthenticated smoke test of the built server. Not verified: live providers, real MCP OAuth clients, deployed cron/webhook, browser interaction of the three non-visual UI data-layer changes.
+
+## Frontend capabilities — 2026-10-07 (local; not deployed)
+The screens now cover the operations that previously had no UI:
+- **AI data policy (owner only).** Source sending, agent apply permission, and a provider allow-list.
+- **Brand profile.** Voice, glossary and prohibited claims.
+- **Usage.** Monthly usage and budget.
+- **Workspace and idea deletion.** Both require confirmation.
+- **Source management.** AI exclusion, deletion, paging, passage search, and a sensitive-data warning on import.
+- **Proposal review.** Word diff, origin, fact warnings, Reject, a check for new proposals, and history filtered by status.
+
+The Web client calls the shared operation registry through a typed `operation()`. Server handlers are typed against the same `OperationResults`, so a changed result shape fails type checking. Errors are localized per display language.
+
+Fixes:
+- **Sites runtime (pre-existing).** The Sites Worker bundled the Vercel (Clerk/Turso) runtime because the framework rewrote `@/` imports before the Vite alias applied. Every request would have answered 401. A pre-resolve plugin now forces `lib/platform/sites.ts`, and `npm run check:sites` (also in CI) guards it.
+- **Passage search.** It hid AI-excluded sources from people. Now people search everything, and agents still never see excluded sources.
+- **Sidebar footer.** It overflowed on short viewports.
+- **AI-exclusion toggle.** It is now optimistic, with rollback if the save fails.
+
+Evidence:
+- `tsc` clean; ESLint reports 0 errors.
+- Tests: 21 unit tests, plus 36 database tests on each of D1 and libSQL.
+- Both builds pass, and the Sites bundle check passes.
+- Browser E2E passed 15/15 on the local Sites Worker with D1 (`docs/qa/README.md`).
+
+Not verified: live AI providers, Clerk sign-in on Vercel, deployed environments and screen-reader output. **Figma sync is blocked** because the connector is not authorized (see `design/figma-sync.json`). Roadmap: `docs/roadmap/2026-10-07-world-class-plan.md`.

@@ -95,3 +95,13 @@ Browser verification used isolated local fixtures (no hosted AI or real customer
 ## 2026-10-03 — Display language preference
 Replaced native selects with a shared language menu in the sidebar footer and account settings. Explicit display-language label, native language names, checked selection and keyboard radio-menu behavior. Footer control occupies its own row. UI changes immediately without navigating, saving or changing production language; transient success notice clears to avoid stale-language copy. Preference remains local to this browser.
 Editable components 141:10673 / 141:10687 and interaction board 141:10713 reuse the implementation palette. Shared sidebar and settings updated; original settings input retained hidden. Node IDs, hashes and verification evidence: language-switcher-2026-10-03.json. Local browser checks cover unsaved-draft preservation, current tab/output-language preservation, reload persistence, keyboard selection/Escape focus, settings synchronization and 390px English layout. No fresh hosted signed-in verification.
+
+## 2026-10-07 — Frontend for the AI core (local; Figma sync BLOCKED)
+The following screens and behaviours were implemented:
+- **Settings.** AI data policy (owner only), monthly usage and budget, brand profile, and workspace deletion with a type-the-name confirmation.
+- **Context.** Source library with AI-exclusion, deletion, paging, passage search and a sensitive-data warning.
+- **Proposals.** Inline word diff, origin chip, fact-warning callout, Reject, and history filtered by status.
+- **Editor.** Idea deletion.
+- **Sidebar.** It now scrolls internally on short viewports. This fixes a footer overflow at 720px height.
+
+Figma was not updated because the Figma connector is not authorized in this session. Exact target node IDs and source hashes are in `figma-sync.json → implementation.frontendCapabilities.pendingTargets`. Sync them in place once the connector is authorized. Until then, Figma does not reflect these screens. Browser evidence: `scripts/e2e/run.sh` passed 15/15 on the local Sites Worker (ja at 1440px, en at 390px). Not deployed.

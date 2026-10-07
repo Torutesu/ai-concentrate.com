@@ -1,4 +1,5 @@
 import type { AiConfig } from "../ai/config";
+import type { OperationResult } from "../domain/operation-results";
 import {
   isOperation,
   operations,
@@ -19,7 +20,7 @@ type Handlers = {
   [N in Operation]: (
     ctx: OperationContext,
     args: OperationInput<N>,
-  ) => Promise<unknown>;
+  ) => Promise<OperationResult<N>>;
 };
 
 const handlers: Handlers = {

@@ -22,3 +22,6 @@ jobs:
       # including applying every migration to an empty database.
       - run: npm test
       - run: npm run build:vercel
+      # The Sites Worker must bundle lib/platform/sites.ts, never the Vercel runtime.
+      - run: npm run build
+      - run: node scripts/check-sites-bundle.mjs
