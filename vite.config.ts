@@ -16,6 +16,8 @@ const managedLinux = readExecutionProfile() === "managed-linux";
 
 const localBindingConfig = {
   main: "./build/sites-worker.ts",
+  // Daily retention purge (build/sites-worker.ts `scheduled`).
+  triggers: { crons: ["17 3 * * *"] },
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [

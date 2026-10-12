@@ -14,12 +14,16 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+export async function api<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = 60_000,
+): Promise<T> {
   const r = await fetch("/api/v1" + path, {
     ...init,
     signal: init?.signal
-      ? AbortSignal.any([init.signal, AbortSignal.timeout(60000)])
-      : AbortSignal.timeout(60000),
+      ? AbortSignal.any([init.signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   // Gateways and crashes can answer with HTML; never surface a JSON parse error.

@@ -78,8 +78,9 @@ export async function runTask(
     const remaining = deadline - clock();
     if (index > 0 && remaining < MIN_FALLBACK_MS) break;
     const started = clock();
+    let result: ProviderResult;
     try {
-      const result = await config.providers[ref.provider].generate({
+      result = await config.providers[ref.provider].generate({
         model: ref.model,
         parts: request.parts,
         schema: request.schema,
@@ -89,15 +90,6 @@ export async function runTask(
         cacheKey: request.cacheKey,
         signal: AbortSignal.timeout(Math.min(ATTEMPT_MS, remaining)),
       });
-      const served = { ...ref, model: result.model };
-      await record({
-        ref: served,
-        attempt: index + 1,
-        result,
-        latencyMs: clock() - started,
-        costMicros: costMicros(config.prices, ref, result.usage),
-      });
-      return { result, ref: served, attempt: index + 1 };
     } catch (e) {
       const error =
         e instanceof ProviderError
@@ -119,7 +111,19 @@ export async function runTask(
       });
       lastError = error;
       if (!error.retryable) throw error;
+      continue;
     }
+    // Recorded outside the provider try: a ledger write failure must surface
+    // as itself, not as a provider error with the billed usage missing.
+    const served = { ...ref, model: result.model };
+    await record({
+      ref: served,
+      attempt: index + 1,
+      result,
+      latencyMs: clock() - started,
+      costMicros: costMicros(config.prices, ref, result.usage),
+    });
+    return { result, ref: served, attempt: index + 1 };
   }
   throw lastError;
 }

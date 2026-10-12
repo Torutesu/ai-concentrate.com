@@ -1,4 +1,10 @@
-import { useState, type ComponentProps, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -6,15 +12,18 @@ import {
   DialogDescription,
   DialogTitle,
 } from "../ui/dialog";
+/** Button that never submits a form unless given `type="submit"`. */
 export function Action({
   primary,
   className = "",
+  type = "button",
   ...props
 }: ComponentProps<"button"> & { primary?: boolean }) {
   return (
     <Button
       variant={primary ? "default" : "outline"}
       className={`btn ${primary ? "primary" : ""} ${className}`}
+      type={type}
       {...props}
     />
   );
@@ -81,6 +90,7 @@ export function ConfirmDialog({
   confirmText,
   typePrompt,
   busy,
+  error,
   onConfirm,
   onClose,
 }: {
@@ -92,11 +102,19 @@ export function ConfirmDialog({
   confirmText?: string;
   typePrompt?: string;
   busy?: boolean;
+  /** Shown inside the dialog: the page behind it is hidden from assistive tech. */
+  error?: string;
   onConfirm: () => void;
   onClose: () => void;
 }) {
   const [typed, setTyped] = useState("");
   const ready = !confirmText || typed.trim() === confirmText.trim();
+  // A confirmed dialog closes from outside; start empty the next time it opens.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) setTyped("");
+  }
   return (
     <Dialog
       open={open}
@@ -135,9 +153,13 @@ export function ConfirmDialog({
               />
             </label>
           )}
+          {error && (
+            <p className="workspace-failure" role="alert">
+              {error}
+            </p>
+          )}
           <div className="workspace-dialog-actions">
             <Action
-              type="button"
               disabled={busy}
               onClick={() => {
                 setTyped("");
@@ -154,4 +176,26 @@ export function ConfirmDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Opens a native <dialog> as a modal on mount. On unmount it closes the dialog
+ * and returns focus to the element that opened it (unmounting an open modal
+ * skips the browser's own focus restoration).
+ */
+export function useModalDialog() {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialog?.showModal();
+    return () => {
+      if (dialog?.open) dialog.close();
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+  return ref;
 }

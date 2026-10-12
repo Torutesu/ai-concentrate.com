@@ -2,6 +2,7 @@ import { digest } from "../domain/hash";
 import type { Production } from "../domain/models";
 import type { WorkspaceSettings } from "../domain/settings";
 import { chunkText, estimateTokens } from "../domain/text";
+import { fence } from "./fence";
 import { redact } from "./redact";
 
 export type RetrievedChunk = {
@@ -71,7 +72,7 @@ function profileText(profile: WorkspaceSettings["profile"]) {
   for (const claim of profile.prohibitedClaims)
     lines.push(`Never claim: ${claim}`);
   return lines.length
-    ? `<workspace_profile>\n${lines.join("\n")}\n</workspace_profile>`
+    ? `<workspace_profile>\n${fence(lines.join("\n"))}\n</workspace_profile>`
     : "";
 }
 
@@ -137,7 +138,7 @@ export async function buildContext(
       .map((c) => {
         const clean = redact(c.body);
         redactions += clean.count;
-        return `<source id="${c.sourceId}#${c.ordinal}">\n${clean.text}\n</source>`;
+        return `<source id="${c.sourceId}#${c.ordinal}">\n${fence(clean.text)}\n</source>`;
       })
       .join("\n");
     blocks.push(

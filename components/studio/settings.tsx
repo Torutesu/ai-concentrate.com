@@ -48,6 +48,11 @@ function PolicyPanel({ s }: { s: StudioController }) {
     owner = s.workspace?.role === "owner";
   const [draft, setDraft] = useState<AiPolicy>(saved);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const { markSettingsDirty } = s;
+  useEffect(() => {
+    markSettingsDirty("policy", dirty);
+    return () => markSettingsDirty("policy", false);
+  }, [dirty, markSettingsDirty]);
   const restricted = draft.allowedProviders !== undefined;
   const providers = [
     ...new Set([...s.aiProviders, ...(draft.allowedProviders ?? [])]),
@@ -253,6 +258,11 @@ function ProfilePanel({ s }: { s: StudioController }) {
   const [draft, setDraft] = useState<ProfileDraft>(() => profileToDraft(saved));
   const next = draftToProfile(draft),
     dirty = !sameProfile(next, saved);
+  const { markSettingsDirty } = s;
+  useEffect(() => {
+    markSettingsDirty("profile", dirty);
+    return () => markSettingsDirty("profile", false);
+  }, [dirty, markSettingsDirty]);
   const setRow = (i: number, fields: Partial<ProfileDraft["glossary"][0]>) =>
     setDraft({
       ...draft,
@@ -288,7 +298,8 @@ function ProfilePanel({ s }: { s: StudioController }) {
             onChange={(e) => setDraft({ ...draft, voice: e.target.value })}
           />
           <small className="field-hint">
-            {draft.voice.length.toLocaleString()} / 2,000
+            {draft.voice.length.toLocaleString(s.locale)} /{" "}
+            {(2000).toLocaleString(s.locale)}
           </small>
         </label>
         <div className="field">
@@ -296,23 +307,22 @@ function ProfilePanel({ s }: { s: StudioController }) {
           {draft.glossary.length > 0 && (
             <div
               className="glossary-table"
-              role="table"
+              role="group"
               aria-label={en ? "Glossary" : "用語集"}
             >
-              <div className="glossary-row glossary-head" role="row">
-                <span role="columnheader">{en ? "Term" : "用語"}</span>
-                <span role="columnheader">{en ? "Write as" : "推奨表記"}</span>
-                <span role="columnheader">
+              {/* Visual column headings; every input carries its own label. */}
+              <div className="glossary-row glossary-head" aria-hidden="true">
+                <span>{en ? "Term" : "用語"}</span>
+                <span>{en ? "Write as" : "推奨表記"}</span>
+                <span>
                   {en
                     ? "Avoid (comma-separated)"
                     : "避ける表記（カンマ区切り）"}
                 </span>
-                <span role="columnheader" className="sr-only">
-                  {en ? "Remove" : "削除"}
-                </span>
+                <span />
               </div>
               {draft.glossary.map((g, i) => (
-                <div className="glossary-row" role="row" key={i}>
+                <div className="glossary-row" key={i}>
                   <input
                     aria-label={en ? `Term ${i + 1}` : `用語 ${i + 1}`}
                     maxLength={100}
@@ -543,7 +553,10 @@ function DangerPanel({ s }: { s: StudioController }) {
       <Action
         className="danger"
         disabled={s.busy}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          s.setError("");
+          setOpen(true);
+        }}
       >
         <Trash2 size={15} />
         {en ? "Delete this workspace" : "このワークスペースを削除"}
@@ -551,6 +564,7 @@ function DangerPanel({ s }: { s: StudioController }) {
       <ConfirmDialog
         open={open}
         busy={s.busy}
+        error={s.error}
         title={en ? `Delete “${name}”?` : `「${name}」を削除しますか？`}
         description={
           <p>

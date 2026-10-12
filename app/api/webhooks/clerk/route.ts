@@ -13,6 +13,8 @@ export async function POST(r: Request) {
   try {
     const secret = clerkWebhookSecret();
     if (!secret) return new Response(null, { status: 404 });
+    if (Number(r.headers.get("content-length") ?? 0) > 100_000)
+      throw new DomainError("TOO_LARGE", 413, "Payload too large.");
     const payload = await r.text();
     if (
       payload.length > 100_000 ||

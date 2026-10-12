@@ -15,6 +15,13 @@
       "when": 1791013733167,
       "tag": "0001_scalable_ai_core",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791789044698,
+      "tag": "0002_production_guards",
+      "breakpoints": true
     }
   ]
 }

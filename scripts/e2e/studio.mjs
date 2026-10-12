@@ -403,7 +403,7 @@ try {
       await risky.locator(".diff-text ins", { hasText: "すぐ" }).waitFor();
       await risky.locator(".diff-text del").first().waitFor();
       await risky.getByText("QA fixture").waitFor();
-      await risky.getByRole("tab", { name: "反映後" }).click();
+      await risky.getByRole("button", { name: "反映後" }).click();
       await risky
         .locator(".diff-text", { hasText: "300%向上します" })
         .waitFor();
@@ -439,12 +439,12 @@ try {
         .getByRole("navigation", { name: "制作形式" })
         .getByRole("button", { name: "変更案", exact: true })
         .click();
-      await owner.getByRole("tab", { name: "適用済み" }).click();
+      await owner.getByRole("button", { name: "適用済み" }).click();
       const row = owner.locator(".decided-list li").first();
       await row.getByRole("button").click();
       await row.locator(".decided-detail .diff-text ins").first().waitFor();
       await row.getByText(/判断日時/).waitFor();
-      await owner.getByRole("tab", { name: "却下" }).click();
+      await owner.getByRole("button", { name: "却下", exact: true }).click();
       await owner
         .locator(".decided-list li")
         .first()
@@ -456,6 +456,41 @@ try {
       });
     },
   );
+
+  await step("unsaved edits survive a reload and can be restored", async () => {
+    await owner
+      .getByRole("navigation", { name: "制作形式" })
+      .getByRole("button", { name: "原稿", exact: true })
+      .click();
+    const body = owner.locator(".document-body textarea");
+    await body.fill((await body.inputValue()) + "（未保存の追記）");
+    await owner.waitForTimeout(900);
+    await owner.reload();
+    await nav(owner, "コンテンツ");
+    await owner.getByText(/未保存の編集が残っています/).waitFor();
+    await owner.getByRole("button", { name: "編集を復元" }).click();
+    await owner
+      .getByRole("navigation", { name: "制作形式" })
+      .getByRole("button", { name: "原稿", exact: true })
+      .click();
+    assert.match(
+      await owner.locator(".document-body textarea").inputValue(),
+      /未保存の追記/,
+    );
+    await owner
+      .locator(".editor-toolbar")
+      .getByRole("button", { name: "保存する" })
+      .click();
+    await notice(owner, "保存しました");
+    // Once saved, the backup is gone: a reload offers nothing.
+    await owner.reload();
+    await nav(owner, "コンテンツ");
+    await owner.locator(".editor-toolbar").waitFor();
+    assert.equal(
+      await owner.getByText(/未保存の編集が残っています/).count(),
+      0,
+    );
+  });
 
   await step("delete the idea from the editor menu", async () => {
     await owner.getByText("書き出し・その他").click();
@@ -501,6 +536,43 @@ try {
       await mobile.context().close();
     },
   );
+
+  await step(
+    "cancelling the create-workspace dialog creates nothing",
+    async () => {
+      await owner.locator(".workspace-trigger").click();
+      await owner.getByRole("button", { name: "ワークスペースを作成" }).click();
+      const dialog = owner.getByRole("dialog");
+      await dialog.getByRole("textbox").fill("作らないワークスペース");
+      await dialog.getByRole("button", { name: "キャンセル" }).click();
+      await dialog.waitFor({ state: "detached" });
+      const list = await op(owner, "workspace_list", {});
+      assert.equal(list.length, 1);
+    },
+  );
+
+  await step("health check and security headers", async () => {
+    const health = await owner.request.get(BASE + "/api/health");
+    assert.equal(health.status(), 200);
+    assert.deepEqual(await health.json(), { status: "ok" });
+    const page = await owner.request.get(BASE + "/");
+    assert.equal(page.headers()["x-content-type-options"], "nosniff");
+    assert.ok(page.headers()["referrer-policy"]);
+    // Cross-site writes are refused even with a valid session.
+    const forged = await owner.request.post(BASE + "/api/v1/operations", {
+      headers: {
+        "content-type": "application/json",
+        origin: "https://evil.example",
+      },
+      data: { name: "workspace_list", arguments: {} },
+    });
+    assert.equal(forged.status(), 403);
+    const plain = await owner.request.post(BASE + "/api/v1/operations", {
+      headers: { "content-type": "text/plain; charset=application/json" },
+      data: JSON.stringify({ name: "workspace_list", arguments: {} }),
+    });
+    assert.equal(plain.status(), 415);
+  });
 
   await step("delete workspace requires typing its name", async () => {
     await nav(owner, "設定");

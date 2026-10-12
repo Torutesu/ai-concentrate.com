@@ -8,7 +8,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,3 +25,14 @@ jobs:
       # The Sites Worker must bundle lib/platform/sites.ts, never the Vercel runtime.
       - run: npm run build
       - run: node scripts/check-sites-bundle.mjs
+      # Browser scenario on the built Sites Worker with a fresh local D1.
+      - run: npx playwright install --with-deps chromium
+      - run: scripts/e2e/run.sh --no-build
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidence
+          path: |
+            .qa/shots
+            .qa/server.log
+          retention-days: 7

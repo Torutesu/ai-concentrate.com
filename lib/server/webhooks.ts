@@ -16,6 +16,14 @@ function equal(a: string, b: string) {
   return diff === 0;
 }
 
+/** Constant-time check of `Authorization: Bearer <secret>`; false when unset. */
+export function bearerMatches(
+  header: string | null,
+  secret: string | undefined,
+) {
+  return Boolean(secret) && equal(header ?? "", `Bearer ${secret}`);
+}
+
 /**
  * Verifies a Svix-signed webhook (used by Clerk): HMAC-SHA256 over
  * "id.timestamp.body" with the base64 secret after "whsec_", within 5 minutes.

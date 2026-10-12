@@ -1,7 +1,8 @@
 // Default runtime is independent Next.js on Vercel. Vite aliases this module to
 // sites.ts; both must export the same names (see lib/platform/contract.ts).
 import { createClient } from "@libsql/client";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
+import { accessRules, decidedById, isAllowed } from "../server/access";
 import { LibsqlDatabase } from "./libsql";
 import { DomainError } from "../domain/models";
 import type { AiEnv } from "../ai/config";
@@ -20,21 +21,50 @@ export async function getUser() {
   if (!userId) return null;
   const user = await currentUser();
   if (!user) return null;
+  const email = user.primaryEmailAddress?.emailAddress ?? "";
   return {
     userId,
-    email: user.primaryEmailAddress?.emailAddress ?? "",
+    email,
     displayName: user.fullName ?? user.username ?? "Member",
+    allowed: isAllowed(accessRules(process.env), { userId, email }),
   };
+}
+const emailCache = new Map<string, { email: string; until: number }>();
+/** Primary email for an allowlist decision, cached per instance for 5 minutes. */
+async function emailOf(userId: string) {
+  const hit = emailCache.get(userId);
+  if (hit && hit.until > Date.now()) return hit.email;
+  const user = await (await clerkClient()).users.getUser(userId);
+  const email = user.primaryEmailAddress?.emailAddress ?? "";
+  if (emailCache.size > 1000) emailCache.clear();
+  emailCache.set(userId, { email, until: Date.now() + 300_000 });
+  return email;
 }
 /**
  * Verified caller for API/MCP requests. Session tokens are verified locally
  * (no Backend API call per request); OAuth access tokens identify external
- * agents and their client. Identity headers from requests are never trusted.
+ * agents and their client and are accepted only once MCP OAuth is enabled.
+ * Identity headers from requests are never trusted. Accounts outside the
+ * deployment's allowlist are refused (see lib/server/access.ts).
  */
 export async function getIdentity(_request: Request): Promise<Identity | null> {
   if (!authConfigured()) return null;
-  const a = await auth({ acceptsToken: ["session_token", "oauth_token"] });
+  const a = await auth({
+    acceptsToken: mcpAvailable()
+      ? ["session_token", "oauth_token"]
+      : ["session_token"],
+  });
   if (!a.isAuthenticated) return null;
+  const rules = accessRules(process.env);
+  const allowed = decidedById(rules, a.userId)
+    ? isAllowed(rules, { userId: a.userId })
+    : isAllowed(rules, { userId: a.userId, email: await emailOf(a.userId) });
+  if (!allowed)
+    throw new DomainError(
+      "ACCESS_DENIED",
+      403,
+      "This account is not allowed to use this deployment.",
+    );
   if (a.tokenType === "oauth_token")
     return {
       userId: a.userId,

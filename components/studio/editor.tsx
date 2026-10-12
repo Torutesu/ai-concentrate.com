@@ -16,7 +16,15 @@ import { Proposals } from "./proposals";
 import { ProductionSearch } from "./production-search";
 import type { StudioController } from "./use-studio";
 import { labels, type Tab } from "./i18n";
-import { Action, Badge, ConfirmDialog, Empty, Field, Panel } from "./ui";
+import {
+  Action,
+  Badge,
+  ConfirmDialog,
+  Empty,
+  Field,
+  Panel,
+  useModalDialog,
+} from "./ui";
 const tabs: Tab[] = [
   "plan",
   "draft",
@@ -54,11 +62,18 @@ export function Editor({ s }: { s: StudioController }) {
         exportMenu.current.querySelector("summary")?.focus();
       }
     };
+    // Keyboard users leaving the menu with Tab close it too.
+    const focusIn = (event: FocusEvent) => {
+      const menu = exportMenu.current;
+      if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+    };
     document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", escape);
+    document.addEventListener("focusin", focusIn);
     return () => {
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", escape);
+      document.removeEventListener("focusin", focusIn);
     };
   }, []);
   const p = s.draft,
@@ -223,6 +238,7 @@ export function Editor({ s }: { s: StudioController }) {
                       className="danger subtle"
                       onClick={() => {
                         if (exportMenu.current) exportMenu.current.open = false;
+                        s.setError("");
                         setConfirmDelete(true);
                       }}
                     >
@@ -245,63 +261,68 @@ export function Editor({ s }: { s: StudioController }) {
                 </select>
               </label>
               <Action primary onClick={s.save} disabled={!s.dirty || !canEdit}>
-                {s.busy ? t.saving : t.save}
+                {s.saving ? t.saving : t.save}
               </Action>
             </div>
           </div>
           {s.tab === "plan" ? (
-            <fieldset disabled={!canEdit} className="split">
-              <Panel>
-                <h2>{en ? "Idea brief" : "企画のブリーフ"}</h2>
-                <Field
-                  label={en ? "Idea title" : "企画名"}
-                  value={p.title}
-                  onChange={(e) => s.patch({ title: e.target.value })}
-                />
-                <Field
-                  label={en ? "Audience" : "対象"}
-                  value={p.persona}
-                  onChange={(e) => s.patch({ persona: e.target.value })}
-                />
-                <Field
-                  label={en ? "Message" : "伝えたいこと"}
-                  value={p.claim}
-                  onChange={(e) => s.patch({ claim: e.target.value })}
-                />
-                <Field
-                  label="CTA"
-                  value={p.cta}
-                  onChange={(e) => s.patch({ cta: e.target.value })}
-                />
-                <Field
-                  label={en ? "Problem" : "顧客の課題"}
-                  value={p.problem}
-                  onChange={(e) => s.patch({ problem: e.target.value })}
-                  multiline
-                />
-                <Field
-                  label={en ? "Hypothesis" : "施策の仮説"}
-                  value={p.hypothesis}
-                  onChange={(e) => s.patch({ hypothesis: e.target.value })}
-                  multiline
-                />
-                <Field
-                  label={en ? "Destination" : "誘導先"}
-                  value={p.destination}
-                  onChange={(e) => s.patch({ destination: e.target.value })}
-                />
-                <Field
-                  label={en ? "Metric" : "評価指標"}
-                  value={p.metric}
-                  onChange={(e) => s.patch({ metric: e.target.value })}
-                />
-                <Field
-                  label={en ? "Review date" : "評価日"}
-                  type="date"
-                  value={p.evaluationDate}
-                  onChange={(e) => s.patch({ evaluationDate: e.target.value })}
-                />
-              </Panel>
+            <div className="split">
+              {/* Viewers can still navigate the plan; only the brief is locked. */}
+              <fieldset disabled={!canEdit}>
+                <Panel>
+                  <h2>{en ? "Idea brief" : "企画のブリーフ"}</h2>
+                  <Field
+                    label={en ? "Idea title" : "企画名"}
+                    value={p.title}
+                    onChange={(e) => s.patch({ title: e.target.value })}
+                  />
+                  <Field
+                    label={en ? "Audience" : "対象"}
+                    value={p.persona}
+                    onChange={(e) => s.patch({ persona: e.target.value })}
+                  />
+                  <Field
+                    label={en ? "Message" : "伝えたいこと"}
+                    value={p.claim}
+                    onChange={(e) => s.patch({ claim: e.target.value })}
+                  />
+                  <Field
+                    label="CTA"
+                    value={p.cta}
+                    onChange={(e) => s.patch({ cta: e.target.value })}
+                  />
+                  <Field
+                    label={en ? "Problem" : "顧客の課題"}
+                    value={p.problem}
+                    onChange={(e) => s.patch({ problem: e.target.value })}
+                    multiline
+                  />
+                  <Field
+                    label={en ? "Hypothesis" : "施策の仮説"}
+                    value={p.hypothesis}
+                    onChange={(e) => s.patch({ hypothesis: e.target.value })}
+                    multiline
+                  />
+                  <Field
+                    label={en ? "Destination" : "誘導先"}
+                    value={p.destination}
+                    onChange={(e) => s.patch({ destination: e.target.value })}
+                  />
+                  <Field
+                    label={en ? "Metric" : "評価指標"}
+                    value={p.metric}
+                    onChange={(e) => s.patch({ metric: e.target.value })}
+                  />
+                  <Field
+                    label={en ? "Review date" : "評価日"}
+                    type="date"
+                    value={p.evaluationDate}
+                    onChange={(e) =>
+                      s.patch({ evaluationDate: e.target.value })
+                    }
+                  />
+                </Panel>
+              </fieldset>
               <Panel>
                 <h2>{en ? "Production plan" : "制作計画"}</h2>
                 {(
@@ -334,7 +355,7 @@ export function Editor({ s }: { s: StudioController }) {
                   {en ? "Write the core draft" : "原稿を書く"}
                 </Action>
               </Panel>
-            </fieldset>
+            </div>
           ) : s.tab === "review" ? (
             <Proposals s={s} />
           ) : s.tab === "updates" ? (
@@ -537,7 +558,8 @@ export function Editor({ s }: { s: StudioController }) {
                     </div>
                     <div className="actions">
                       <Badge>
-                        {selected.locale} / {selected.kind}
+                        {selected.locale === "ja" ? "日本語" : "English"} ·{" "}
+                        {t[s.tab]}
                       </Badge>
                       <Action
                         disabled={!canEdit}
@@ -640,6 +662,7 @@ export function Editor({ s }: { s: StudioController }) {
       <ConfirmDialog
         open={confirmDelete}
         busy={s.busy}
+        error={s.error}
         title={en ? `Delete “${p?.title}”?` : `「${p?.title}」を削除しますか？`}
         description={
           <p>
@@ -681,10 +704,7 @@ function ReferenceDialog({
   body: string;
   close: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
+  const ref = useModalDialog();
   return (
     <dialog
       ref={ref}

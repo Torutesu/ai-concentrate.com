@@ -206,6 +206,8 @@ export const aiRuns = sqliteTable(
   (t) => [
     index("ai_runs_ws_created").on(t.workspaceId, t.createdAt),
     index("ai_runs_actor_created").on(t.actorId, t.createdAt),
+    // Deployment-wide monthly budget sums by time alone.
+    index("ai_runs_created").on(t.createdAt),
   ],
 );
 /** Mutations and denied requests. Holds identifiers only, never content. */
@@ -227,5 +229,21 @@ export const auditEvents = sqliteTable(
   (t) => [
     index("audit_ws_created").on(t.workspaceId, t.createdAt),
     index("audit_created").on(t.createdAt),
+  ],
+);
+/**
+ * Fixed-window counters for per-user rate limits (one row per key and
+ * window). Rows older than a day are purged by the retention job.
+ */
+export const rateLimits = sqliteTable(
+  "rate_limits",
+  {
+    key: text("key").notNull(),
+    windowStart: integer("window_start").notNull(),
+    count: integer("count").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.key, t.windowStart] }),
+    index("rate_limits_window").on(t.windowStart),
   ],
 );

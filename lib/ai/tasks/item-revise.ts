@@ -8,10 +8,11 @@ import {
 import type { ContentItem, Production } from "../../domain/models";
 import { applyEdits, editSchema, estimateTokens } from "../../domain/text";
 import type { ModelTier, PromptParts } from "../types";
+import { fence, unfence } from "../fence";
 
 export const ITEM_REVISE = {
   id: "item.revise",
-  version: `item.revise@2026-10-03.1+${PLAYBOOK_VERSION}`,
+  version: `item.revise@2026-10-12.1+${PLAYBOOK_VERSION}`,
 } as const;
 
 /** Bodies at least this long are edited with find/replace operations. */
@@ -66,8 +67,14 @@ const outputSchema = z.discriminatedUnion("mode", [
 export function parseReviseOutput(raw: unknown, current: string) {
   const output = outputSchema.parse(raw);
   return output.mode === "replace"
-    ? output.body
-    : applyEdits(current, output.edits);
+    ? unfence(output.body)
+    : applyEdits(
+        current,
+        output.edits.map((e) => ({
+          find: unfence(e.find),
+          replace: unfence(e.replace),
+        })),
+      );
 }
 
 /** Short social and step copy uses the fast tier; everything else standard. */
@@ -91,18 +98,18 @@ export function buildRevisePrompt(input: {
 }): PromptParts {
   const brief = Object.entries(marketingBrief(input.production))
     .filter(([, value]) => value.trim())
-    .map(([key, value]) => `${key}: ${value}`)
+    .map(([key, value]) => `${key}: ${fence(value)}`)
     .join("\n");
   const { item } = input;
   const task = [
     `Channel guidance (${item.kind}): ${channelGuidance(item.kind)}`,
-    `Production: ${input.production.title}`,
+    `Production: ${fence(input.production.title)}`,
     brief
       ? `<brief>\n${brief}\n</brief>`
       : "<brief>No brief fields are filled in; do not invent them.</brief>",
-    `Target item: "${item.title}" (${item.kind}), output locale: ${item.locale}`,
-    `<current_text mode_hint="${item.body.length >= EDIT_MODE_CHARS ? "edits" : "replace"}">\n${item.body}\n</current_text>`,
-    `<instruction>\n${input.instruction}\n</instruction>`,
+    `Target item: "${fence(item.title)}" (${item.kind}), output locale: ${item.locale}`,
+    `<current_text mode_hint="${item.body.length >= EDIT_MODE_CHARS ? "edits" : "replace"}">\n${fence(item.body)}\n</current_text>`,
+    `<instruction>\n${fence(input.instruction)}\n</instruction>`,
   ].join("\n\n");
   return { system: SYSTEM_PROMPT, context: input.context, task };
 }

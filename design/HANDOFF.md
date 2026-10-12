@@ -105,3 +105,14 @@ The following screens and behaviours were implemented:
 - **Sidebar.** It now scrolls internally on short viewports. This fixes a footer overflow at 720px height.
 
 Figma was not updated because the Figma connector is not authorized in this session. Exact target node IDs and source hashes are in `figma-sync.json → implementation.frontendCapabilities.pendingTargets`. Sync them in place once the connector is authorized. Until then, Figma does not reflect these screens. Browser evidence: `scripts/e2e/run.sh` passed 15/15 on the local Sites Worker (ja at 1440px, en at 390px). Not deployed.
+
+## 2026-10-12 — Production hardening (local; Figma sync BLOCKED)
+Visible UI changes:
+- **Contrast:** muted text `#5e6b63`; form-control borders `#88948c`.
+- **Draft recovery:** a "restore unsaved edits" banner.
+- **Feedback:** confirmation dialogs show errors inline; the proposal status and view controls are now toggle buttons (same look).
+- **Labels:** the sidebar role, source kinds and the item language/kind are localized.
+- **Pages:** an access-denied page, error and not-found pages, and bilingual sign-in copy.
+- **Editor:** the Save label shows "Saving…" only while saving; viewers can navigate the plan tab.
+
+Figma was not updated because the connector is not authorized. Targets and source hashes are in `figma-sync.json → implementation.productionHardening`. Browser evidence: `npm run e2e` passed 18/18.

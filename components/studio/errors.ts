@@ -96,6 +96,34 @@ const messages: Record<string, Copy> = {
     ja: "同じ操作キーで異なる内容が送られました。画面を再読み込みしてください。",
     en: "The same request key was reused with different content. Reload.",
   },
+  PRODUCTION_LIMIT: {
+    ja: "このワークスペースの企画数が上限に達しました。不要な企画を削除してください。",
+    en: "This workspace has reached its idea limit. Delete ideas you no longer need.",
+  },
+  PROPOSAL_LIMIT: {
+    ja: "未確認の変更案が上限に達しました。適用または却下してから作成してください。",
+    en: "Too many open proposals. Apply or reject some first.",
+  },
+  ITEM_TOO_LARGE: {
+    ja: "結果が1項目の上限サイズを超えます。本文を短くするか、別の項目に分けてください。",
+    en: "The result exceeds the size limit for one item. Shorten it or split it into another item.",
+  },
+  RATE_LIMITED: {
+    ja: "短時間に操作が集中しています。少し待ってから再試行してください。",
+    en: "Too many requests in a short time. Wait a moment and retry.",
+  },
+  ACCESS_DENIED: {
+    ja: "このアカウントには利用権限がありません。管理者に確認してください。",
+    en: "This account is not allowed to use this workspace. Ask the administrator.",
+  },
+  AGENT_PROPOSE_ONLY: {
+    ja: "このワークスペースでは、エージェントの変更は変更案としてのみ受け付けます。",
+    en: "This workspace accepts agent changes only as proposals.",
+  },
+  ORIGIN: {
+    ja: "別のサイトからの操作は受け付けられません。画面を再読み込みしてください。",
+    en: "Requests from another site are not accepted. Reload the page.",
+  },
   STORAGE_UNAVAILABLE: {
     ja: "保存先に接続できません。時間をおいて再試行してください。",
     en: "Storage is unavailable. Retry shortly.",

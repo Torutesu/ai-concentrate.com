@@ -102,6 +102,7 @@ export function fakeAi(
     },
     prices: { "fake:fake-model": { input: 1, output: 2 } },
     monthlyTokenBudget: 1_000_000,
+    globalMonthlyTokenBudget: 0,
     contextTokens: 6_000,
     ...overrides,
   };

@@ -25,21 +25,32 @@ export const requestIdOf = (r: Request) =>
   r.headers.get("x-request-id")?.match(/^[\w-]{8,64}$/)?.[0] ??
   crypto.randomUUID();
 
+/**
+ * CSRF defence for cookie sessions: a browser always sends Origin or
+ * Sec-Fetch-Site on cross-site requests, so either one naming another site is
+ * refused. Bearer-token clients (agents, CLI) send neither and are unaffected.
+ */
+export function assertSameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  const site = request.headers.get("sec-fetch-site");
+  const crossOrigin = origin
+    ? origin !== new URL(request.url).origin
+    : site !== null && site !== "same-origin" && site !== "none";
+  if (crossOrigin)
+    throw new DomainError(
+      "ORIGIN",
+      403,
+      "Cross-origin writes are not allowed.",
+    );
+}
+
 /** Resolves the verified caller. Throws 401 without a valid session or token. */
 export async function operationContext(
   request: Request,
   requestId: string,
   write: boolean,
 ): Promise<OperationContext> {
-  if (write) {
-    const origin = request.headers.get("origin");
-    if (origin && origin !== new URL(request.url).origin)
-      throw new DomainError(
-        "ORIGIN",
-        403,
-        "Cross-origin writes are not allowed.",
-      );
-  }
+  if (write) assertSameOrigin(request);
   const identity = await getIdentity(request);
   if (!identity)
     throw new DomainError("UNAUTHENTICATED", 401, "Sign in to continue.");
@@ -57,7 +68,14 @@ export async function operationContext(
 }
 
 export async function body<T>(r: Request, schema: ZodType<T>): Promise<T> {
-  if (!r.headers.get("content-type")?.includes("application/json"))
+  // Exact media type: "text/plain; x=application/json" is a CORS-safelisted
+  // type a cross-site form could send without a preflight.
+  const type = r.headers
+    .get("content-type")
+    ?.split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (type !== "application/json")
     throw new DomainError("CONTENT_TYPE", 415, "Use application/json.");
   const reader = r.body?.getReader();
   if (!reader) throw new DomainError("INVALID_JSON", 400, "Empty request.");
@@ -99,6 +117,7 @@ export function errorResponse(
     "X-Request-Id": requestId,
   };
   if (e instanceof DomainError) {
+    if (e.retryAfter) headers["Retry-After"] = String(e.retryAfter);
     if (e.status === 401 && request) {
       const origin = new URL(request.url).origin;
       // Lets MCP clients discover where to obtain an access token (RFC 9728).

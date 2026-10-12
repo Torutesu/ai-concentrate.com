@@ -89,3 +89,24 @@ test("0001 backfills summaries, search, slim receipts and proposal status from 0
   assert.equal(applied.data.items[1].body, "hi");
   await close();
 });
+
+test("health reports ok on a migrated database and names missing schema otherwise", async () => {
+  const { checkHealth, expectedColumns } = await import("../lib/server/health");
+  assert.ok(expectedColumns.ai_runs.includes("cost_micros"));
+  const full = await createDatabase();
+  try {
+    assert.deepEqual(await checkHealth(full.db), { status: "ok" });
+  } finally {
+    await full.close();
+  }
+  const [first] = await migrationFiles();
+  const old = await createDatabase(first);
+  try {
+    const behind = await checkHealth(old.db);
+    assert.equal(behind.status, "unavailable");
+    assert.ok(behind.status === "unavailable" && behind.reason === "schema");
+    assert.ok(behind.status === "unavailable" && Boolean(behind.missing));
+  } finally {
+    await old.close();
+  }
+});

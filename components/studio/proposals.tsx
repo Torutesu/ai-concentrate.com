@@ -43,14 +43,14 @@ export function Proposals({ s }: { s: StudioController }) {
       <div className="proposal-toolbar">
         <div
           className="segmented"
-          role="tablist"
+          role="group"
           aria-label={en ? "Proposal status" : "変更案の状態"}
         >
           {filters.map(([value, label]) => (
             <button
               key={value}
-              role="tab"
-              aria-selected={filter === value}
+              type="button"
+              aria-pressed={filter === value}
               onClick={() => setFilter(value)}
             >
               {label}
@@ -62,8 +62,14 @@ export function Proposals({ s }: { s: StudioController }) {
             disabled={s.busy || checking}
             onClick={async () => {
               setChecking(true);
-              await s.refreshChanges();
-              setChecking(false);
+              try {
+                if (await s.refreshChanges())
+                  s.setNotice(
+                    en ? "Proposals are up to date" : "変更案を最新にしました",
+                  );
+              } finally {
+                setChecking(false);
+              }
             }}
           >
             <RefreshCw size={14} />
@@ -218,28 +224,28 @@ function ProposalCard({
       <div className="proposal-view">
         <div
           className="segmented small"
-          role="tablist"
+          role="group"
           aria-label={en ? "View" : "表示"}
         >
           <button
-            role="tab"
-            aria-selected={mode === "diff"}
+            type="button"
+            aria-pressed={mode === "diff"}
             onClick={() => setMode("diff")}
           >
             {en ? "Changes" : "差分"}
           </button>
           <button
-            role="tab"
-            aria-selected={mode === "after"}
+            type="button"
+            aria-pressed={mode === "after"}
             onClick={() => setMode("after")}
           >
             {en ? "Result" : "反映後"}
           </button>
         </div>
-        <small
-          className="diff-stats"
-          aria-label={en ? "Characters changed" : "変更した文字数"}
-        >
+        <small className="diff-stats">
+          <span className="sr-only">
+            {en ? "Characters changed: " : "変更した文字数："}
+          </span>
           <span className="added">+{stats.added.toLocaleString(s.locale)}</span>{" "}
           <span className="removed">
             −{stats.removed.toLocaleString(s.locale)}
@@ -247,7 +253,11 @@ function ProposalCard({
         </small>
       </div>
       {mode === "diff" ? (
-        <DiffView parts={parts} label={en ? "Proposed changes" : "変更箇所"} />
+        <DiffView
+          parts={parts}
+          label={en ? "Proposed changes" : "変更箇所"}
+          en={en}
+        />
       ) : (
         <div className="diff-text">{c.after}</div>
       )}
@@ -280,17 +290,39 @@ function ProposalCard({
   );
 }
 
-/** Inline word diff; insertions and deletions are also announced as text. */
-function DiffView({ parts, label }: { parts: DiffPart[]; label: string }) {
+/**
+ * Inline word diff. Colour and strike-through are not announced by screen
+ * readers, so each change also carries visually hidden, localized markers.
+ */
+function DiffView({
+  parts,
+  label,
+  en,
+}: {
+  parts: DiffPart[];
+  label: string;
+  en: boolean;
+}) {
+  const [added, removed, end] = en
+    ? ["[added: ", "[removed: ", "]"]
+    : ["［追加：", "［削除：", "］"];
   return (
     <div className="diff-text" role="group" aria-label={label}>
       {parts.map((p, i) =>
         p.type === "same" ? (
           <span key={i}>{p.text}</span>
         ) : p.type === "add" ? (
-          <ins key={i}>{p.text}</ins>
+          <ins key={i}>
+            <span className="sr-only">{added}</span>
+            {p.text}
+            <span className="sr-only">{end}</span>
+          </ins>
         ) : (
-          <del key={i}>{p.text}</del>
+          <del key={i}>
+            <span className="sr-only">{removed}</span>
+            {p.text}
+            <span className="sr-only">{end}</span>
+          </del>
         ),
       )}
     </div>
@@ -309,7 +341,7 @@ function DecidedList({
     [cursor, setCursor] = useState<string | null>(null),
     [more, setMore] = useState<string | undefined>(),
     [pending, setPending] = useState(true),
-    [error, setError] = useState(""),
+    [error, setError] = useState<unknown>(null),
     [openId, setOpenId] = useState<string | null>(null);
   const productionId = s.selected?.id;
   useEffect(() => {
@@ -330,23 +362,23 @@ function DecidedList({
         const page = r.items as ChangeSummary[];
         setItems((old) => (more ? [...old, ...page] : page));
         setCursor(r.nextCursor);
-        setError("");
+        setError(null);
       })
       .catch((e) => {
-        if (!c.signal.aborted) setError(errorMessage(e, s.locale));
+        if (!c.signal.aborted) setError(e);
       })
       .finally(() => {
         if (!c.signal.aborted) setPending(false);
       });
     return () => c.abort();
-  }, [s.workspaceId, productionId, s.locale, status, more]);
+  }, [s.workspaceId, productionId, status, more]);
   if (pending && !items.length)
     return (
       <p className="muted" role="status">
         {en ? "Loading…" : "読み込み中…"}
       </p>
     );
-  if (error) return <p role="alert">{error}</p>;
+  if (error) return <p role="alert">{errorMessage(error, s.locale)}</p>;
   if (!items.length)
     return (
       <Empty title={en ? "Nothing here yet" : "まだありません"}>
@@ -411,7 +443,7 @@ function DecidedList({
 function DecidedDetail({ s, id }: { s: StudioController; id: string }) {
   const en = s.locale === "en";
   const [change, setChange] = useState<Change | null>(null),
-    [error, setError] = useState("");
+    [error, setError] = useState<unknown>(null);
   useEffect(() => {
     const c = new AbortController();
     operation(
@@ -421,11 +453,15 @@ function DecidedDetail({ s, id }: { s: StudioController; id: string }) {
     )
       .then(setChange)
       .catch((e) => {
-        if (!c.signal.aborted) setError(errorMessage(e, s.locale));
+        if (!c.signal.aborted) setError(e);
       });
     return () => c.abort();
-  }, [s.workspaceId, s.locale, id]);
-  if (error) return <p role="alert">{error}</p>;
+  }, [s.workspaceId, id]);
+  const parts = useMemo(
+    () => (change ? diffText(change.before, change.after) : []),
+    [change],
+  );
+  if (error) return <p role="alert">{errorMessage(error, s.locale)}</p>;
   if (!change)
     return (
       <p className="muted" role="status">
@@ -439,10 +475,7 @@ function DecidedDetail({ s, id }: { s: StudioController; id: string }) {
         {change.instruction}
       </p>
       <Origin s={s} change={change} />
-      <DiffView
-        parts={diffText(change.before, change.after)}
-        label={en ? "Changes" : "変更箇所"}
-      />
+      <DiffView parts={parts} label={en ? "Changes" : "変更箇所"} en={en} />
       {change.decidedAt && (
         <small className="muted">
           {en ? "Decided" : "判断日時"}:{" "}

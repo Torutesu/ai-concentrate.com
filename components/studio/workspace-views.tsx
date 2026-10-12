@@ -79,9 +79,11 @@ export function Context({ s }: { s: StudioController }) {
                 value={kind}
                 onChange={(e) => setKind(e.target.value as typeof kind)}
               >
-                <option value="markdown">Markdown / Text</option>
-                <option value="url">URL</option>
-                <option value="repository">Repository</option>
+                {(["markdown", "url", "repository"] as const).map((k) => (
+                  <option key={k} value={k}>
+                    {sourceKindLabel(k, en)}
+                  </option>
+                ))}
               </select>
             </label>
             <Field
@@ -121,7 +123,8 @@ export function Context({ s }: { s: StudioController }) {
               onChange={(e) => setBody(e.target.value)}
             />
             <small className="muted">
-              {body.length.toLocaleString()} / 60,000
+              {body.length.toLocaleString(s.locale)} /{" "}
+              {(60000).toLocaleString(s.locale)}
             </small>
             {fileError && <p role="alert">{fileError}</p>}
             {sensitive.length > 0 && (
@@ -146,6 +149,7 @@ export function Context({ s }: { s: StudioController }) {
               </div>
             )}
             <Action
+              type="submit"
               primary
               disabled={!name.trim() || !body.trim() || body.length > 60000}
             >
@@ -215,7 +219,7 @@ function SourceLibrary({ s }: { s: StudioController }) {
             >
               <summary>
                 <span className="source-name">{source.name}</span>
-                <Badge>{source.kind}</Badge>
+                <Badge>{sourceKindLabel(source.kind, en)}</Badge>
                 {source.aiExcluded && (
                   <Badge>{en ? "Not sent to AI" : "AIに送らない"}</Badge>
                 )}
@@ -261,7 +265,10 @@ function SourceLibrary({ s }: { s: StudioController }) {
                   <Action
                     className="danger subtle"
                     disabled={s.busy}
-                    onClick={() => setPendingDelete(source)}
+                    onClick={() => {
+                      s.setError("");
+                      setPendingDelete(source);
+                    }}
                   >
                     <Trash2 size={14} />
                     {en ? "Delete" : "削除"}
@@ -286,6 +293,7 @@ function SourceLibrary({ s }: { s: StudioController }) {
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         busy={s.busy}
+        error={s.error}
         title={
           en
             ? `Delete “${pendingDelete?.name}”?`
@@ -362,7 +370,7 @@ function SourceSearch({ s }: { s: StudioController }) {
           }
           onChange={(e) => setQuery(e.target.value)}
         />
-        <Action disabled={!valid || state.kind === "loading"}>
+        <Action type="submit" disabled={!valid || state.kind === "loading"}>
           {en ? "Search" : "検索"}
         </Action>
       </form>
@@ -623,7 +631,15 @@ export function Calendar({ s }: { s: StudioController }) {
                   >
                     <button
                       className="day-number"
-                      aria-label={date}
+                      aria-label={new Date(year, m, n).toLocaleDateString(
+                        s.locale,
+                        {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          weekday: "long",
+                        },
+                      )}
                       aria-pressed={day === date}
                       onClick={() => setDay(date)}
                     >
@@ -914,7 +930,7 @@ export function SettingsView({
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-            <Action primary disabled={s.busy || !name.trim()}>
+            <Action type="submit" primary disabled={s.busy || !name.trim()}>
               {labels[s.locale].create}
             </Action>
           </form>
@@ -945,4 +961,11 @@ function IdeaPicker({ s }: { s: StudioController }) {
       </select>
     </label>
   );
+}
+function sourceKindLabel(kind: "markdown" | "url" | "repository", en: boolean) {
+  return {
+    markdown: en ? "Markdown / text" : "Markdown・テキスト",
+    url: "URL",
+    repository: en ? "Repository" : "リポジトリ",
+  }[kind];
 }

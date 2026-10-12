@@ -15,9 +15,10 @@ import { digest } from "../domain/hash";
 import {
   DomainError,
   assertAggregateBudget,
+  itemSchema,
   type Change,
 } from "../domain/models";
-import type { StudioService } from "./service";
+import { itemTooLarge, type StudioService } from "./service";
 
 export type ReviseInput = {
   productionId: string;
@@ -56,7 +57,11 @@ export async function generateProposal(
   );
   if (replay) return replay;
   try {
-    await service.assertBudget(ai.monthlyTokenBudget);
+    await service.assertBudget(
+      ai.monthlyTokenBudget,
+      ai.globalMonthlyTokenBudget,
+    );
+    await repository.assertProposalRoom(workspaceId);
     const { settings } = await repository.settings(workspaceId);
     const { production, item } = target;
     const context = await buildContext(
@@ -125,6 +130,7 @@ export async function generateProposal(
         );
       throw invalidOutput();
     }
+    if (!itemSchema.shape.body.safeParse(after).success) throw itemTooLarge();
     assertAggregateBudget({
       ...production.data,
       items: production.data.items.map((i) =>

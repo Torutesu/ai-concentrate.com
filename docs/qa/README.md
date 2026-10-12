@@ -9,7 +9,8 @@ Run these before merging any change that touches UI or the request path.
 | Unit + DB contract | `npm test` | Unit tests once, `*.db.test.ts` on Miniflare D1 **and** libSQL |
 | Vercel build | `npm run build:vercel` | Next.js target compiles |
 | Sites build | `npm run build && npm run check:sites` | Sites Worker bundles `lib/platform/sites.ts`, not the Clerk/Turso runtime |
-| Browser E2E | `PLAYWRIGHT_MODULE=… scripts/e2e/run.sh` | The scenario below on a fresh local D1 |
+| Browser E2E | `npm run e2e` (CI: `scripts/e2e/run.sh --no-build`) | The scenario below on a fresh local D1, with Playwright pinned to 1.56.1 |
+| Prompt eval | `npm run eval -- --models provider:model` (`--dry-run` checks the harness only) | Required for any prompt or model change |
 
 ## Browser scenario (`scripts/e2e/studio.mjs`)
 
@@ -31,7 +32,10 @@ Screenshots are written to `.qa/shots`, which is git-ignored.
 12. In the history view, confirm the applied and rejected lists, including the expanded diff and the decision time.
 13. Delete the idea from the editor menu.
 14. In English at 390px, open settings and context and confirm there is no horizontal overflow.
-15. Delete the workspace. The confirmation requires typing its name.
+15. Edit a draft without saving, reload, restore the backed-up edits, then save. After saving, a reload offers no backup.
+16. Cancel the create-workspace dialog after typing a name. No workspace is created.
+17. Check `/api/health`, the security headers, and that a cross-site Origin (403) and a `text/plain` body (415) are refused.
+18. Delete the workspace. The confirmation requires typing its name.
 
 Not covered:
 

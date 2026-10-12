@@ -1,6 +1,6 @@
 "use client";
 import { AgentReview } from "./agent-review";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   ChartNoAxesCombined,
@@ -44,6 +44,29 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
     t = labels[s.locale],
     en = s.locale === "en",
     [name, setName] = useState("");
+  const viewTitle = t[s.view],
+    workspaceName = s.workspace?.name;
+  // Each view is a page: name it in the tab and move focus to its heading
+  // after a navigation (not on first load), as a page load would.
+  const navigated = useRef(false);
+  useEffect(() => {
+    document.title = [viewTitle, workspaceName, "AI Concentrate"]
+      .filter(Boolean)
+      .join(" · ");
+  }, [viewTitle, workspaceName]);
+  useEffect(() => {
+    if (!navigated.current) {
+      navigated.current = true;
+      return;
+    }
+    const heading = [
+      ...document.querySelectorAll<HTMLElement>("#workspace-main h1"),
+    ].find((h) => h.offsetParent !== null);
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }, [s.view]);
   return (
     <div className="studio-shell">
       <a className="skip-link" href="#workspace-main">
@@ -72,16 +95,14 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
           <span className="avatar">{user.name.slice(0, 1)}</span>
           <div>
             <strong>{user.name}</strong>
-            <small>{s.workspace?.role ?? "—"}</small>
+            <small>
+              {s.workspace ? roleLabel(s.workspace.role, s.locale) : "—"}
+            </small>
           </div>
           <LanguageSwitcher locale={s.locale} onChange={s.setLocale} />
         </div>
       </aside>
-      <main
-        id="workspace-main"
-        className="workspace-main"
-        aria-busy={s.loading || s.busy}
-      >
+      <main id="workspace-main" className="workspace-main">
         <div className="topline">
           <span>
             {s.workspace?.name ?? "AI Concentrate"}{" "}
@@ -101,7 +122,13 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
                   ? en
                     ? "Processing…"
                     : "処理中…"
-                  : (s.dirty || (s.view === "context" && Boolean(s.sourceDraft.name || s.sourceDraft.reference || s.sourceDraft.body)))
+                  : s.dirty ||
+                      (s.view === "context" &&
+                        Boolean(
+                          s.sourceDraft.name ||
+                            s.sourceDraft.reference ||
+                            s.sourceDraft.body,
+                        ))
                     ? t.unsaved
                     : t.saved}
           </span>
@@ -114,9 +141,25 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
             </Action>
           </div>
         )}
-        {s.notice && (
-          <div className="notice" role="status">
-            {s.notice}
+        {/* Always mounted, so screen readers announce each new message. */}
+        <div role="status" aria-live="polite" aria-atomic="true">
+          {s.notice && <div className="notice">{s.notice}</div>}
+        </div>
+        {s.recovery && (
+          <div className="notice recovery-notice">
+            <span>
+              {en
+                ? `Unsaved edits from ${new Date(s.recovery.at).toLocaleTimeString(s.locale)} were found for this idea.`
+                : `この企画に${new Date(s.recovery.at).toLocaleTimeString(s.locale)}時点の未保存の編集が残っています。`}
+            </span>
+            <span className="actions">
+              <Action primary onClick={s.restoreBackup}>
+                {en ? "Restore edits" : "編集を復元"}
+              </Action>
+              <Action onClick={s.discardBackup}>
+                {en ? "Discard" : "破棄"}
+              </Action>
+            </span>
           </div>
         )}
         {s.nextCursor && !s.loading && (
@@ -197,7 +240,7 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
                   placeholder="ShogunAI"
                 />
               </label>
-              <Action primary disabled={s.busy || !name.trim()}>
+              <Action type="submit" primary disabled={s.busy || !name.trim()}>
                 {t.create}
               </Action>
             </form>
@@ -244,4 +287,12 @@ export function Studio({ user }: { user: { name: string; email: string } }) {
       </main>
     </div>
   );
+}
+function roleLabel(role: string, locale: "ja" | "en") {
+  const names: Record<string, [string, string]> = {
+    owner: ["オーナー", "Owner"],
+    editor: ["編集者", "Editor"],
+    viewer: ["閲覧者", "Viewer"],
+  };
+  return names[role]?.[locale === "ja" ? 0 : 1] ?? role;
 }

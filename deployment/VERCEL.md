@@ -118,3 +118,40 @@ Environment (set in Vercel; never commit or paste values):
 Not verified in this change: live provider calls, Clerk OAuth with real MCP
 clients, the deployed cron and webhook. Tests use provider doubles and local
 D1/libSQL.
+
+## Production readiness — 2026-10-12
+
+Before deploying this code, apply migration `0002_production_guards.sql`. It adds the `rate_limits` table and one index:
+```
+node --env-file=.env.production.local scripts/migrate-libsql.mjs
+```
+`GET /api/health` answers 503 with `reason: "schema"` until every table and column the code uses exists. Run it after each deploy.
+
+New configuration (set in Vercel; never commit values):
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `ACCESS_ALLOWLIST` | **yes in Production** | Comma-separated Clerk user IDs, emails or `@domain` entries. Production refuses everyone when it is unset. |
+| `ACCESS_MODE` | no | `open` admits every signed-in account (only for a deliberately public deployment); `allowlist` forces the list in Preview too |
+| `AI_GLOBAL_MONTHLY_TOKEN_BUDGET` | recommended | Billable tokens per month across all users; `0` or unset means no cap |
+| `CRON_SECRET` | yes | Also unlocks schema details in `/api/health` |
+
+### Go-live checklist (in order)
+1. Restrict Clerk sign-up, or keep `ACCESS_ALLOWLIST` limited to the owners. A refused account sees its user ID and can switch accounts.
+2. Apply migrations (above) and confirm `/api/health` returns `{"status":"ok"}`.
+3. Set `CRON_SECRET` and confirm the daily `/api/cron/retention` run in the Vercel cron logs. The purge is time-bounded and resumes the next day.
+4. Configure `CLERK_WEBHOOK_SECRET` with the `user.deleted` event.
+5. Set the per-user and global AI budgets. Run `npm run eval -- --models <provider:model>` against the configured models and keep the report.
+6. Point an uptime monitor at `/api/health`, alerting on any non-200 response.
+7. Check response headers on the deployed domain (`X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`, `nosniff`, HSTS).
+8. Rollback: redeploy the previous build from Vercel. Migrations only add tables, columns and indexes, so the previous build keeps working on the migrated database.
+
+### Built-in limits (lib/domain/limits.ts)
+- **Writes:** 120 per user per minute.
+- **AI operations:** 20 per user per 10 minutes, on top of workspace admission (2 concurrent, 100 per day) and the token budgets.
+- **Workspace caps:**
+  - 300 ideas per workspace.
+  - 300 open proposals per workspace.
+  - 20 owned workspaces per user. Deleted workspaces count until they are purged.
+- **Saved versions:** the last 100 per idea are kept.
+- **Over-limit responses:** 429, with `Retry-After` where it applies.

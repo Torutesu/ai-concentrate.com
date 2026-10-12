@@ -212,7 +212,7 @@ export const operations = {
       })
       .strict(),
     description:
-      "Edit one unlocked item. baseHash (from item_get) must match the current text; other items may have changed meanwhile. Use edits [{find, replace}] for small changes.",
+      "Edit one unlocked item. baseHash (from item_get) must match the current text; other items may have changed meanwhile. Use edits [{find, replace}] for small changes. Agents may edit directly only when the workspace policy lets agents apply changes; otherwise use change_propose.",
     scope: "studio:write",
     idempotent: true,
   },
