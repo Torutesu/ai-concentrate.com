@@ -40,7 +40,9 @@ const encodeCursor = (key: string, id: string) =>
   btoa(JSON.stringify([key, id]));
 
 /** Trigram FTS needs 3+ characters; quoting makes the input a literal phrase. */
-export const ftsPhrase = (text: string) => `"${text.replaceAll('"', '""')}"`;
+/** One quoted FTS5 phrase. Control characters (e.g. NUL) end the SQL string early, so they become spaces. */
+export const ftsPhrase = (text: string) =>
+  `"${text.replace(/[\u0000-\u001f\u007f]/g, " ").replaceAll('"', '""')}"`;
 
 export type RunRecord = {
   id: string;
@@ -168,9 +170,17 @@ export class Repository implements ContextStore {
       this.db
         .prepare(
           `INSERT OR IGNORE INTO workspaces(id,name,owner_id,created_at)
-           SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM workspaces WHERE owner_id=? AND deleted_at IS NULL) < ?`,
+           SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM workspaces WHERE owner_id=? AND (deleted_at IS NULL OR deleted_at>?)) < ?`,
         )
-        .bind(id, name, userId, now(), userId, LIMITS.workspacesPerOwner),
+        .bind(
+          id,
+          name,
+          userId,
+          now(),
+          userId,
+          daysAgo(RETENTION.workspaceGraceDays, Date.now()),
+          LIMITS.workspacesPerOwner,
+        ),
       this.db
         .prepare(
           "INSERT OR IGNORE INTO memberships(workspace_id,user_id,role) SELECT id,owner_id,'owner' FROM workspaces WHERE id=? AND owner_id=?",
@@ -192,7 +202,7 @@ export class Repository implements ContextStore {
     throw new DomainError(
       "WORKSPACE_LIMIT",
       429,
-      `You can own at most ${LIMITS.workspacesPerOwner} workspaces.`,
+      `You can own at most ${LIMITS.workspacesPerOwner} workspaces, including ones deleted in the last ${RETENTION.workspaceGraceDays} days.`,
     );
   }
   async settings(
@@ -301,18 +311,46 @@ export class Repository implements ContextStore {
       data.items.length,
       utf8Bytes(json),
     ];
+    // Applying a proposal must not race its rejection: the production only
+    // changes while that proposal is still open.
+    const stillOpen = input.appliedChangeId
+      ? " AND EXISTS (SELECT 1 FROM changes WHERE workspace_id=? AND id=? AND status='proposed')"
+      : "";
+    const openArgs = input.appliedChangeId
+      ? [workspaceId, input.appliedChangeId]
+      : [];
     const mutation =
       base === 0
         ? this.db
             .prepare(
-              "INSERT OR IGNORE INTO productions(workspace_id,id,revision,data,last_command,updated_at,title,planned_date,item_count,size_bytes) VALUES(?,?,?,?,?,?,?,?,?,?)",
+              "INSERT OR IGNORE INTO productions(workspace_id,id,revision,data,last_command,updated_at,title,planned_date,item_count,size_bytes) SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM productions WHERE workspace_id=?) < ?",
             )
-            .bind(workspaceId, id, next, json, key, at, ...summary)
+            .bind(
+              workspaceId,
+              id,
+              next,
+              json,
+              key,
+              at,
+              ...summary,
+              workspaceId,
+              LIMITS.productionsPerWorkspace,
+            )
         : this.db
             .prepare(
-              "UPDATE productions SET revision=?,data=?,last_command=?,updated_at=?,title=?,planned_date=?,item_count=?,size_bytes=? WHERE workspace_id=? AND id=? AND revision=?",
+              `UPDATE productions SET revision=?,data=?,last_command=?,updated_at=?,title=?,planned_date=?,item_count=?,size_bytes=? WHERE workspace_id=? AND id=? AND revision=?${stillOpen}`,
             )
-            .bind(next, json, key, at, ...summary, workspaceId, id, base);
+            .bind(
+              next,
+              json,
+              key,
+              at,
+              ...summary,
+              workspaceId,
+              id,
+              base,
+              ...openArgs,
+            );
     const guard = [workspaceId, id, next, key] as const;
     const written =
       "EXISTS (SELECT 1 FROM productions WHERE workspace_id=?1 AND id=?2 AND revision=?3 AND last_command=?4)";
@@ -370,9 +408,32 @@ export class Repository implements ContextStore {
       throw error;
     }
     const receipt = await this.receipt(workspaceId, key, fingerprint);
-    if (!receipt)
-      throw new DomainError("CONFLICT", 409, "A newer revision exists.");
-    return receipt;
+    if (receipt) return receipt;
+    if (input.appliedChangeId) {
+      const status = await this.db
+        .prepare("SELECT status FROM changes WHERE workspace_id=? AND id=?")
+        .bind(workspaceId, input.appliedChangeId)
+        .first<{ status: string }>();
+      if (status && status.status !== "proposed")
+        throw new DomainError(
+          "CHANGE_CLOSED",
+          409,
+          `This proposal is already ${status.status}.`,
+        );
+    }
+    if (base === 0) {
+      const exists = await this.db
+        .prepare("SELECT 1 AS x FROM productions WHERE workspace_id=? AND id=?")
+        .bind(workspaceId, id)
+        .first();
+      if (!exists)
+        throw new DomainError(
+          "PRODUCTION_LIMIT",
+          429,
+          `A workspace can hold at most ${LIMITS.productionsPerWorkspace} ideas. Delete ideas you no longer need.`,
+        );
+    }
+    throw new DomainError("CONFLICT", 409, "A newer revision exists.");
   }
   async deleteProduction(workspaceId: string, id: string) {
     if (!(await this.get(workspaceId, id)))
@@ -477,16 +538,25 @@ export class Repository implements ContextStore {
     workspaceId: string,
     limit: number,
     cursor?: string,
+    includeAiExcluded = true,
   ): Promise<{ items: SourceSummary[]; nextCursor: string | null }> {
     const [created, id] = decodeCursor(cursor);
     const rows = (
       await this.db
         .prepare(
           `SELECT id,workspace_id AS workspaceId,name,kind,reference,hash,created_at AS createdAt,chars,preview,ai_excluded AS aiExcluded
-             FROM sources WHERE workspace_id=? AND (?='' OR created_at<? OR (created_at=? AND id<?))
+             FROM sources WHERE workspace_id=? AND (?='' OR created_at<? OR (created_at=? AND id<?)) AND (ai_excluded=0 OR ?)
              ORDER BY created_at DESC,id DESC LIMIT ?`,
         )
-        .bind(workspaceId, created, created, created, id, limit + 1)
+        .bind(
+          workspaceId,
+          created,
+          created,
+          created,
+          id,
+          includeAiExcluded ? 1 : 0,
+          limit + 1,
+        )
         .all<
           Omit<SourceSummary, "truncated" | "aiExcluded"> & {
             aiExcluded: number;
@@ -622,17 +692,26 @@ export class Repository implements ContextStore {
         .bind(chunks.length, workspaceId, sourceId),
     ]);
   }
-  async searchChunks(workspaceId: string, match: string, limit: number) {
+  /**
+   * Ranked passages. AI-excluded sources are skipped unless
+   * `includeAiExcluded` (people searching their own library see everything).
+   */
+  async searchChunks(
+    workspaceId: string,
+    match: string,
+    limit: number,
+    includeAiExcluded = false,
+  ) {
     return (
       await this.db
         .prepare(
           `SELECT c.id,c.source_id AS sourceId,c.ordinal,c.body FROM source_chunks_fts
              JOIN source_chunks c ON c.id=source_chunks_fts.rowid
              JOIN sources s ON s.id=c.source_id
-            WHERE source_chunks_fts MATCH ? AND c.workspace_id=? AND s.ai_excluded=0
+            WHERE source_chunks_fts MATCH ? AND c.workspace_id=? AND (s.ai_excluded=0 OR ?)
             ORDER BY bm25(source_chunks_fts) LIMIT ?`,
         )
-        .bind(match, workspaceId, limit)
+        .bind(match, workspaceId, includeAiExcluded ? 1 : 0, limit)
         .all<RetrievedChunk>()
     ).results;
   }
@@ -717,11 +796,17 @@ export class Repository implements ContextStore {
     if (!r) throw new DomainError("NOT_FOUND", 404, "Change not found.");
     return decodeChange(r);
   }
+  /**
+   * Inserts an open proposal unless the workspace already holds the maximum
+   * number of open proposals, or the ID exists (an idempotent replay).
+   */
   private insertChange(change: Change, runId: string | null) {
     const origin = change.origin;
     return this.db
       .prepare(
-        "INSERT INTO changes(id,workspace_id,production_id,data,created_at,status,item_id,before_hash,origin_kind,client_id,run_id) VALUES(?,?,?,?,?,'proposed',?,?,?,?,?)",
+        `INSERT OR IGNORE INTO changes(id,workspace_id,production_id,data,created_at,status,item_id,before_hash,origin_kind,client_id,run_id)
+         SELECT ?1,?2,?3,?4,?5,'proposed',?6,?7,?8,?9,?10
+         WHERE (SELECT COUNT(*) FROM changes WHERE workspace_id=?2 AND status='proposed') < ?11`,
       )
       .bind(
         change.id,
@@ -734,11 +819,45 @@ export class Repository implements ContextStore {
         origin?.kind ?? "server_ai",
         origin?.kind === "client_agent" ? origin.clientId : null,
         runId,
+        LIMITS.openChangesPerWorkspace,
       );
   }
-  async addChange(change: Change) {
-    await this.insertChange(change, null).run();
-    return change;
+  private proposalLimit() {
+    return new DomainError(
+      "PROPOSAL_LIMIT",
+      429,
+      `A workspace can hold at most ${LIMITS.openChangesPerWorkspace} open proposals. Apply or reject some first.`,
+    );
+  }
+  /** Cheap pre-check so AI work is not spent on a proposal that cannot be stored. */
+  async assertProposalRoom(workspaceId: string) {
+    const r = await this.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM changes WHERE workspace_id=? AND status='proposed'",
+      )
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    if ((r?.n ?? 0) >= LIMITS.openChangesPerWorkspace)
+      throw this.proposalLimit();
+  }
+  /** Returns the stored proposal; a concurrent replay of the same ID wins once. */
+  async addChange(change: Change & { fingerprint?: string }) {
+    const r = await this.insertChange(change, null).run();
+    if (r.meta.changes) return change;
+    const existing = await this.change(change.workspaceId, change.id).catch(
+      () => null,
+    );
+    if (!existing) throw this.proposalLimit();
+    if (
+      (existing as Change & { fingerprint?: string }).fingerprint !==
+      change.fingerprint
+    )
+      throw new DomainError(
+        "IDEMPOTENCY_MISMATCH",
+        409,
+        "This request key was used with different input.",
+      );
+    return existing;
   }
   async rejectChange(workspaceId: string, id: string, actorId: string) {
     const r = await this.db
@@ -760,6 +879,14 @@ export class Repository implements ContextStore {
     const at = new Date();
     const activeSince = new Date(at.getTime() - 120_000).toISOString();
     const daySince = new Date(at.getTime() - 86_400_000).toISOString();
+    // A claim still "running" after the admission window belongs to a request
+    // the platform killed (function timeout); close it so retries get an answer.
+    await this.db
+      .prepare(
+        "UPDATE generation_requests SET status='failed' WHERE workspace_id=? AND status='running' AND created_at<=?",
+      )
+      .bind(workspaceId, activeSince)
+      .run();
     // Admission is one atomic SQLite statement, shared across server instances.
     // Failed attempts count too: a provider may charge before the response is lost.
     const r = await this.db
@@ -815,10 +942,15 @@ export class Repository implements ContextStore {
       this.insertChange(change, runId),
       this.db
         .prepare(
-          "UPDATE generation_requests SET status='succeeded',change_id=? WHERE workspace_id=? AND key=?",
+          "UPDATE generation_requests SET status='succeeded',change_id=?1 WHERE workspace_id=?2 AND key=?3 AND EXISTS (SELECT 1 FROM changes WHERE workspace_id=?2 AND id=?1)",
         )
         .bind(change.id, change.workspaceId, key),
     ]);
+    const stored = await this.db
+      .prepare("SELECT 1 AS x FROM changes WHERE workspace_id=? AND id=?")
+      .bind(change.workspaceId, change.id)
+      .first();
+    if (!stored) throw this.proposalLimit();
     return change;
   }
   async releaseGeneration(workspaceId: string, key: string) {
@@ -953,77 +1085,149 @@ export class Repository implements ContextStore {
           )
           .bind(userId),
       ),
-    ]);
-  }
-  /** Bounded per call so one cron invocation stays within its time limit. */
-  async purge(at = Date.now(), batch = 5000) {
-    const del = (table: string, where: string, ...args: unknown[]) =>
       this.db
         .prepare(
-          `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${where} LIMIT ${batch})`,
+          "UPDATE changes SET decided_by='deleted-user' WHERE decided_by=?",
         )
-        .bind(...args)
-        .run()
-        .then((r) => r.meta.changes);
+        .bind(userId),
+      this.db
+        .prepare(
+          "UPDATE changes SET data=json_set(data,'$.createdBy','deleted-user') WHERE json_extract(data,'$.createdBy')=?",
+        )
+        .bind(userId),
+      this.db
+        .prepare(
+          "UPDATE changes SET data=json_set(data,'$.decidedBy','deleted-user') WHERE json_extract(data,'$.decidedBy')=?",
+        )
+        .bind(userId),
+    ]);
+  }
+
+  /**
+   * Counts one hit in a fixed window and returns the new count. One atomic
+   * statement, so concurrent server instances share the limit.
+   */
+  async hit(key: string, windowStart: number) {
+    const r = await this.db
+      .prepare(
+        "INSERT INTO rate_limits(key,window_start,count) VALUES(?,?,1) ON CONFLICT(key,window_start) DO UPDATE SET count=count+1 RETURNING count",
+      )
+      .bind(key, windowStart)
+      .first<{ count: number }>();
+    return r?.count ?? 1;
+  }
+  /** Billable tokens across the whole deployment since a date (global budget). */
+  async totalBillableTokens(since: string) {
+    const r = await this.db
+      .prepare(
+        "SELECT COALESCE(SUM(COALESCE(input_tokens,0)-COALESCE(cached_input_tokens,0)+COALESCE(output_tokens,0)),0) AS n FROM ai_runs WHERE created_at>=?",
+      )
+      .bind(since)
+      .first<{ n: number }>();
+    return r?.n ?? 0;
+  }
+  /** Bounded per call so one cron invocation stays within its time limit. */
+  /**
+   * Daily retention. Every delete is bounded and the whole run stops at a
+   * time budget, so a large backlog is drained over several runs instead of
+   * failing one oversized transaction. Safe to run repeatedly.
+   */
+  async purge(at = Date.now(), batch = 2000, budgetMs = 40_000) {
+    const deadline = Date.now() + budgetMs;
+    const drain = async (table: string, where: string, ...args: unknown[]) => {
+      let total = 0;
+      while (Date.now() < deadline) {
+        const n = (
+          await this.db
+            .prepare(
+              `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${where} LIMIT ${batch})`,
+            )
+            .bind(...args)
+            .run()
+        ).meta.changes;
+        total += n;
+        if (n < batch) break;
+      }
+      return total;
+    };
     const counts: Record<string, number> = {
-      commands: await del(
+      commands: await drain(
         "commands",
         "created_at<?",
         daysAgo(RETENTION.commandDays, at),
       ),
-      generationRequests: await del(
+      generationRequests: await drain(
         "generation_requests",
         "created_at<?",
         daysAgo(RETENTION.generationRequestDays, at),
       ),
-      changes: await del(
+      changes: await drain(
         "changes",
-        "(status<>'proposed' AND COALESCE(decided_at,created_at)<?1) OR (status='proposed' AND created_at<?1)",
+        "COALESCE(decided_at,created_at)<?",
         daysAgo(RETENTION.decidedChangeDays, at),
       ),
-      aiRuns: await del(
+      aiRuns: await drain(
         "ai_runs",
         "created_at<?",
         daysAgo(RETENTION.ledgerDays, at),
       ),
-      auditEvents: await del(
+      auditEvents: await drain(
         "audit_events",
         "created_at<?",
         daysAgo(RETENTION.ledgerDays, at),
+      ),
+      rateLimits: await drain(
+        "rate_limits",
+        "window_start<?",
+        Math.floor(at / 1000) - 86_400,
+      ),
+      revisions: await drain(
+        "revisions",
+        `EXISTS (SELECT 1 FROM productions p WHERE p.workspace_id=revisions.workspace_id AND p.id=revisions.production_id AND revisions.revision <= p.revision - ?)`,
+        RETENTION.revisionsPerProduction,
       ),
       workspaces: 0,
     };
     const expired = (
       await this.db
         .prepare(
-          "SELECT id FROM workspaces WHERE deleted_at IS NOT NULL AND deleted_at<? LIMIT 10",
+          "SELECT id FROM workspaces WHERE deleted_at IS NOT NULL AND deleted_at<? ORDER BY deleted_at LIMIT 20",
         )
         .bind(daysAgo(RETENTION.workspaceGraceDays, at))
         .all<{ id: string }>()
     ).results;
+    // Children first, the workspace row last: an interrupted run leaves the
+    // workspace marked deleted and the next run continues where this stopped.
+    const children = [
+      "search_docs",
+      "source_chunks",
+      "sources",
+      "changes",
+      "revisions",
+      "productions",
+      "commands",
+      "generation_requests",
+      "memberships",
+    ];
     for (const { id } of expired) {
-      await this.db.batch(
-        [
-          "search_docs",
-          "source_chunks",
-          "sources",
-          "changes",
-          "revisions",
-          "productions",
-          "commands",
-          "generation_requests",
-          "memberships",
-        ]
-          .map((table) =>
-            this.db
-              .prepare(`DELETE FROM ${table} WHERE workspace_id=?`)
-              .bind(id),
-          )
-          .concat(
-            this.db.prepare("DELETE FROM workspaces WHERE id=?").bind(id),
-          ),
-      );
-      counts.workspaces++;
+      if (Date.now() >= deadline) break;
+      try {
+        for (const table of children) await drain(table, "workspace_id=?", id);
+        if (Date.now() >= deadline) break;
+        await this.db
+          .prepare("DELETE FROM workspaces WHERE id=?")
+          .bind(id)
+          .run();
+        counts.workspaces++;
+      } catch (e) {
+        console.error(
+          JSON.stringify({
+            event: "purge_workspace_failed",
+            workspaceId: id,
+            error: String(e).slice(0, 300),
+          }),
+        );
+      }
     }
     return counts;
   }

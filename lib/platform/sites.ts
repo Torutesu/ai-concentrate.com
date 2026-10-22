@@ -7,7 +7,11 @@ import type { Identity, ProtectedResourceMetadata } from "./contract";
 
 // Private Sites runtime: the gateway authenticates every request (including
 // MCP OAuth) and supplies identity headers. Never expose this Worker directly.
-export const getUser = getChatGPTUser;
+/** The private Sites gateway admits only the project's owners. */
+export async function getUser() {
+  const user = await getChatGPTUser();
+  return user ? { ...user, allowed: true } : null;
+}
 export const authConfigured = () => true;
 export async function getIdentity(request: Request): Promise<Identity | null> {
   const user = await getChatGPTUser();

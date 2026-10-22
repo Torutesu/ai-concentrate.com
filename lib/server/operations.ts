@@ -1,10 +1,12 @@
 import type { AiConfig } from "../ai/config";
+import type { OperationResult } from "../domain/operation-results";
 import {
   isOperation,
   operations,
   type Operation,
   type OperationInput,
 } from "../domain/operations";
+import { RATE_LIMITS } from "../domain/limits";
 import { DomainError } from "../domain/models";
 import { generateProposal } from "./generation";
 import { Repository } from "./repository";
@@ -19,7 +21,7 @@ type Handlers = {
   [N in Operation]: (
     ctx: OperationContext,
     args: OperationInput<N>,
-  ) => Promise<unknown>;
+  ) => Promise<OperationResult<N>>;
 };
 
 const handlers: Handlers = {
@@ -119,6 +121,31 @@ const handlers: Handlers = {
     service.usage(a.workspaceId, ai().monthlyTokenBudget),
 };
 
+/**
+ * Per-user fixed-window limit shared by every transport (one atomic counter
+ * write). Reads are not limited; system jobs are exempt.
+ */
+async function enforceRateLimit(
+  ctx: OperationContext,
+  bucket: keyof typeof RATE_LIMITS,
+) {
+  const { actor, repository } = ctx.service;
+  if (actor.channel === "system") return;
+  const rule = RATE_LIMITS[bucket];
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - (now % rule.windowSeconds);
+  const count = await repository.hit(`${bucket}:${actor.userId}`, windowStart);
+  if (count > rule.limit) {
+    const retryAfter = windowStart + rule.windowSeconds - now;
+    throw new DomainError(
+      "RATE_LIMITED",
+      429,
+      `Too many requests. Try again in ${retryAfter} seconds.`,
+      retryAfter,
+    );
+  }
+}
+
 const targetOf = (args: unknown) => {
   const a = (args ?? {}) as Record<string, unknown>;
   for (const key of ["productionId", "sourceId", "changeId", "id"])
@@ -180,6 +207,11 @@ export async function executeOperation(
   const args = definition.input.parse(input);
   const readOnly = "readOnly" in definition && definition.readOnly;
   try {
+    if (!readOnly)
+      await enforceRateLimit(
+        ctx,
+        "openWorld" in definition && definition.openWorld ? "ai" : "writes",
+      );
     const result = await (
       handlers[name] as (c: OperationContext, a: unknown) => Promise<unknown>
     )(ctx, args);

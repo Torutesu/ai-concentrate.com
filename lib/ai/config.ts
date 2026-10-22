@@ -38,6 +38,8 @@ export type AiConfig = {
   prices: Record<string, Price>;
   /** Billable tokens (uncached input + output) per user per calendar month. */
   monthlyTokenBudget: number;
+  /** Billable tokens per calendar month across the whole deployment; 0 = no cap. */
+  globalMonthlyTokenBudget: number;
   /** Token budget for retrieved source text in each request. */
   contextTokens: number;
 };
@@ -56,6 +58,7 @@ export type AiEnv = Partial<
     | "AI_ROUTING"
     | "AI_PRICES"
     | "AI_MONTHLY_TOKEN_BUDGET"
+    | "AI_GLOBAL_MONTHLY_TOKEN_BUDGET"
     | "AI_CONTEXT_TOKENS",
     string
   >
@@ -147,6 +150,10 @@ export function loadAiConfig(
     routes: { fast: route("fast"), standard: route("standard") },
     prices: json(env.AI_PRICES, z.record(priceSchema), "AI_PRICES") ?? {},
     monthlyTokenBudget: positiveInt(env.AI_MONTHLY_TOKEN_BUDGET, 2_000_000),
+    globalMonthlyTokenBudget: positiveInt(
+      env.AI_GLOBAL_MONTHLY_TOKEN_BUDGET,
+      0,
+    ),
     contextTokens: positiveInt(env.AI_CONTEXT_TOKENS, 6_000),
   };
 }

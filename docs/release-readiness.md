@@ -59,3 +59,85 @@ Implements the non-UI review (`docs/reviews/2026-10-03-non-ui-design-review.md`,
 - Proposal lifecycle (proposed/applied/rejected/stale) with three-way apply; agent scopes, policy-gated agent apply, audit events; MCP prompts, actionable tool errors, compact responses, `item_patch`/`brief_patch`/`change_propose`; Clerk OAuth token acceptance and RFC 9728 metadata on Vercel.
 - CI workflow, eval harness (7 fixed cases), AGENTS.md invariants.
 Evidence: `tsc` clean; ESLint 0 errors; 15 unit tests and 36 database tests on each of Miniflare D1 and libSQL pass; Next and Sites builds pass; unauthenticated smoke test of the built server. Not verified: live providers, real MCP OAuth clients, deployed cron/webhook, browser interaction of the three non-visual UI data-layer changes.
+
+## Frontend capabilities — 2026-10-07 (local; not deployed)
+The screens now cover the operations that previously had no UI:
+- **AI data policy (owner only).** Source sending, agent apply permission, and a provider allow-list.
+- **Brand profile.** Voice, glossary and prohibited claims.
+- **Usage.** Monthly usage and budget.
+- **Workspace and idea deletion.** Both require confirmation.
+- **Source management.** AI exclusion, deletion, paging, passage search, and a sensitive-data warning on import.
+- **Proposal review.** Word diff, origin, fact warnings, Reject, a check for new proposals, and history filtered by status.
+
+The Web client calls the shared operation registry through a typed `operation()`. Server handlers are typed against the same `OperationResults`, so a changed result shape fails type checking. Errors are localized per display language.
+
+Fixes:
+- **Sites runtime (pre-existing).** The Sites Worker bundled the Vercel (Clerk/Turso) runtime because the framework rewrote `@/` imports before the Vite alias applied. Every request would have answered 401. A pre-resolve plugin now forces `lib/platform/sites.ts`, and `npm run check:sites` (also in CI) guards it.
+- **Passage search.** It hid AI-excluded sources from people. Now people search everything, and agents still never see excluded sources.
+- **Sidebar footer.** It overflowed on short viewports.
+- **AI-exclusion toggle.** It is now optimistic, with rollback if the save fails.
+
+Evidence:
+- `tsc` clean; ESLint reports 0 errors.
+- Tests: 21 unit tests, plus 36 database tests on each of D1 and libSQL.
+- Both builds pass, and the Sites bundle check passes.
+- Browser E2E passed 15/15 on the local Sites Worker with D1 (`docs/qa/README.md`).
+
+Not verified: live AI providers, Clerk sign-in on Vercel, deployed environments and screen-reader output. **Figma sync is blocked** because the connector is not authorized (see `design/figma-sync.json`). Roadmap: `docs/roadmap/2026-10-07-world-class-plan.md`.
+
+## Production hardening — 2026-10-12 (local; not deployed)
+Three independent audits (security, reliability, frontend). Every finding below is fixed and covered by tests:
+- **Access.** Production fails closed unless `ACCESS_ALLOWLIST` (user IDs, emails or `@domain`) or `ACCESS_MODE=open` is set, and refused accounts see a page explaining why. OAuth tokens are accepted only when MCP OAuth is enabled.
+- **Abuse and cost.**
+  - Per-user rate limits: 120 writes per minute and 20 AI calls per 10 minutes, applied to every transport and audited.
+  - Caps: 300 ideas and 300 open proposals per workspace.
+  - Deleted workspaces count against the owner quota until purged.
+  - The last 100 revisions per idea are kept.
+  - Deployment-wide monthly AI budget.
+  - Fact-warning scan is bounded.
+- **Agent policy.**
+  - Under "propose only" (the default), agents can no longer edit or reject directly; they must use `change_propose`.
+  - Agents never set or clear locks.
+  - Agents cannot list, read or search sources that are AI-excluded or blocked by the policy.
+- **Prompt integrity.** Untrusted text can no longer open or close the prompt's own sections. A zero-width fence is added in prompts and removed from output, so edits remain exact. Task version is `item.revise@2026-10-12.1`.
+- **Data integrity.**
+  - AI output and applied proposals respect the 48 KB per-item limit (fixes an idea that could no longer be saved).
+  - Apply can no longer race a reject.
+  - Concurrent identical proposals no longer cause a 500.
+  - Abandoned generation claims close after 2 minutes.
+  - Router usage records are no longer misattributed to the provider.
+  - A NUL character in search queries no longer causes a 500.
+- **Retention.** The purge is time-bounded and resumable: each workspace is erased children-first, and one failure no longer blocks the others. The Sites Worker now has its own daily `scheduled` purge. Account deletion also anonymizes proposal authors and decision makers. Note that open proposals also expire after 90 days.
+- **Web security.**
+  - Strict `Origin`/`Sec-Fetch-Site` CSRF check and an exact JSON media type.
+  - Security headers on both runtimes; framing is denied on Vercel.
+  - Constant-time comparison of cron and health secrets.
+  - Webhook size is checked before the body is read.
+  - 14 unused runtime dependencies and 58 unused UI-kit files removed.
+- **Operations.** `/api/health` checks database reachability and the schema (every table and column in `db/schema.ts`, in one portable query). CI now builds Sites, checks the runtime bundle and runs the browser E2E.
+- **Frontend.**
+  - Cancel in the create-workspace dialog no longer creates a workspace.
+  - Focus returns after busy operations and closed dialogs.
+  - Errors are shown inside confirmation dialogs.
+  - Contrast: muted text is AA on every surface, and control borders reach 3:1.
+  - Real toggle buttons instead of fake tabs; a valid glossary structure; localized screen-reader diff markers.
+  - A persistent live region announces notices.
+  - The page title and heading focus follow each view.
+  - Unsaved edits are backed up in the tab and offered for restore after a crash or reload.
+  - Leaving settings with unsaved changes asks first.
+  - Proposals load per idea, so requests no longer grow with the workspace.
+  - Generation waits 75 s, so it outlasts the server's limit, and a lost answer re-reads proposals instead of paying twice.
+  - Workspace creation is idempotent on retry.
+  - Notices clear themselves.
+  - Error boundaries and a not-found page.
+  - Fonts load without CSS `@import`; `noindex`.
+  - Localized labels.
+
+Evidence:
+- `tsc` clean; ESLint 0 errors.
+- Tests: 25 unit tests, plus 45 database tests on each of D1 and libSQL.
+- Next and Sites builds pass, and the Sites bundle check passes.
+- Browser E2E passes 18/18 on the local Sites Worker with D1.
+- Eval: dry run only (3/7; the dry run echoes the input and checks the harness). A live eval needs provider keys and is not done.
+
+Not verified: deployed environments, live providers, Clerk allowlist behaviour against a real Clerk tenant, and the Sites platform honouring the cron trigger. **Figma sync is blocked** because the connector is not authorized.

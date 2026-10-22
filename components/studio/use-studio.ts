@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Change,
   Production,
@@ -9,11 +9,22 @@ import type {
   VersionedProduction,
   Workspace,
 } from "../../lib/domain/models";
-import { api, json, ApiError } from "../../lib/studio-client";
+import type { WorkspaceSettings } from "../../lib/domain/settings";
+import { api, ApiError, json, operation } from "../../lib/studio-client";
+import { errorMessage } from "./errors";
 import { newProduction, shogunExample } from "../../lib/domain/seed";
 import type { Locale, View, Tab } from "./i18n";
-/** List entries carry a preview; the full body is loaded when a source is opened. */
-export type LoadedSource = SourceSummary & { body?: string };
+/**
+ * List entries carry a preview; text is loaded in pages when a source is
+ * opened (`nextOffset` is null once the whole body is present).
+ */
+export type LoadedSource = SourceSummary & {
+  body?: string;
+  nextOffset?: number | null;
+  /** Kinds of secrets/contact data detected on import (redacted before AI use). */
+  sensitive?: string[];
+};
+export type LoadedSettings = { settings: WorkspaceSettings; revision: number };
 export function useStudio() {
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<
@@ -32,6 +43,9 @@ export function useStudio() {
     [nextCursor, setNextCursor] = useState<string | null>(null),
     [selected, setSelected] = useState<VersionedProduction | undefined>(),
     [sources, setSources] = useState<LoadedSource[]>([]),
+    [sourceCursor, setSourceCursor] = useState<string | null>(null),
+    [settings, setSettings] = useState<LoadedSettings | null>(null),
+    [aiProviders, setAiProviders] = useState<string[]>([]),
     [changes, setChanges] = useState<Change[]>([]),
     [selectedId, setSelectedId] = useState(""),
     [draft, setDraft] = useState<Production | null>(null),
@@ -42,15 +56,48 @@ export function useStudio() {
     [workspaceFailed, setWorkspaceFailed] = useState(false),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
+    [saving, setSaving] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [caps, setCaps] = useState<Record<string, boolean>>({});
+    [caps, setCaps] = useState<Record<string, boolean>>({}),
+    [dirtySettings, setDirtySettings] = useState<string[]>([]),
+    [recovery, setRecovery] = useState<DraftBackup | null>(null);
   const workspace = workspaces.find((w) => w.id === workspaceId);
-  const dirty = Boolean(
-    draft && selected && json(draft) !== json(selected.data),
+  const settingsDirty = dirtySettings.length > 0;
+  /** Settings panels report unsaved drafts so leaving the view can warn. */
+  const markSettingsDirty = useCallback(
+    (panel: string, isDirty: boolean) =>
+      setDirtySettings((list) =>
+        isDirty === list.includes(panel)
+          ? list
+          : isDirty
+            ? [...list, panel]
+            : list.filter((p) => p !== panel),
+      ),
+    [],
+  );
+  // Async results check this before writing state, so a response that
+  // arrives after a workspace switch never lands in the new workspace.
+  const workspaceRef = useRef(workspaceId);
+  useEffect(() => {
+    workspaceRef.current = workspaceId;
+  }, [workspaceId]);
+  const localeRef = useRef(locale);
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
+  const message = (e: unknown) => errorMessage(e, localeRef.current);
+  const savedJson = useMemo(
+    () => (selected ? json(selected.data) : ""),
+    [selected],
+  );
+  const dirty = useMemo(
+    () => Boolean(draft && selected && json(draft) !== savedJson),
+    [draft, selected, savedJson],
   );
   const pendingSave = useRef<{ payload: string; key: string } | null>(null),
-    operation = useRef(false);
+    pendingCreate = useRef<{ name: string; id: string } | null>(null),
+    inFlight = useRef(false);
   const confirmLeave = () =>
     !dirty ||
     window.confirm(
@@ -66,25 +113,94 @@ export function useStudio() {
       if (
         dirty ||
         busy ||
+        settingsDirty ||
         Object.values(sourceDrafts).some((d) => d.name || d.reference || d.body)
       )
         e.preventDefault();
     };
     window.addEventListener("beforeunload", fn);
     return () => window.removeEventListener("beforeunload", fn);
-  }, [dirty, busy, sourceDrafts]);
+  }, [dirty, busy, settingsDirty, sourceDrafts]);
+  // Success messages are transient; errors stay until the next action.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  // Local backup of unsaved edits (this tab only), so a crash, an expired
+  // session or a closed tab does not lose work. Cleared once saved.
+  useEffect(() => {
+    if (!selected || !workspaceId) return;
+    // Keep an offered backup until the person restores or discards it.
+    if (recovery?.productionId === selected.id && !dirty) return;
+    const key = backupKey(workspaceId, selected.id);
+    const timer = setTimeout(() => {
+      try {
+        if (dirty && draft)
+          sessionStorage.setItem(
+            key,
+            json({ revision: selected.revision, data: draft, at: Date.now() }),
+          );
+        else sessionStorage.removeItem(key);
+      } catch {}
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [dirty, draft, selected, workspaceId, recovery]);
+  // Offer a backup when its idea is opened at the same saved revision.
+  useEffect(() => {
+    if (!selected || !workspaceId) return;
+    let backup: DraftBackup | null = null;
+    try {
+      const raw = sessionStorage.getItem(backupKey(workspaceId, selected.id));
+      const parsed = raw ? (JSON.parse(raw) as DraftBackup) : null;
+      if (
+        parsed &&
+        parsed.revision === selected.revision &&
+        json(parsed.data) !== json(selected.data)
+      )
+        backup = { ...parsed, productionId: selected.id };
+    } catch {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecovery(backup);
+  }, [selected, workspaceId]);
+  // Open proposals are loaded per idea, so the request never grows with the workspace.
+  useEffect(() => {
+    if (!workspaceId || !selectedId) return;
+    const controller = new AbortController();
+    operation(
+      "change_list",
+      {
+        workspaceId,
+        productionId: selectedId,
+        status: "proposed",
+        includeText: true,
+        limit: 50,
+      },
+      { signal: controller.signal },
+    )
+      .then((r) => {
+        if (!controller.signal.aborted) setChanges(r.items as Change[]);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [workspaceId, selectedId]);
   const init = useCallback(async () => {
     try {
       try {
         const stored = localStorage.getItem("concentrate.locale");
         if (stored === "en" || stored === "ja") setLocale(stored);
+        else if (!navigator.language.toLowerCase().startsWith("ja"))
+          setLocale("en");
       } catch {}
       const [w, c] = await Promise.all([
         api<{ workspaces: Workspace[] }>("/workspaces"),
-        api<{ capabilities: Record<string, boolean> }>("/capabilities"),
+        api<{ capabilities: Record<string, boolean>; aiProviders?: string[] }>(
+          "/capabilities",
+        ),
       ]);
       setWorkspaces(w.workspaces);
       setCaps(c.capabilities);
+      setAiProviders(c.aiProviders ?? []);
       let remembered = "";
       try {
         remembered = localStorage.getItem("concentrate.workspace") ?? "";
@@ -117,14 +233,18 @@ export function useStudio() {
         `/workspaces/${workspaceId}/productions`,
         { signal: controller.signal },
       ),
-      api<{ sources: LoadedSource[] }>(`/workspaces/${workspaceId}/sources`, {
-        signal: controller.signal,
-      }),
-      api<{ changes: Change[] }>(`/workspaces/${workspaceId}/changes`, {
-        signal: controller.signal,
-      }),
+      operation(
+        "context_list",
+        { workspaceId, limit: SOURCE_PAGE },
+        { signal: controller.signal },
+      ),
+      operation(
+        "workspace_settings_get",
+        { workspaceId },
+        { signal: controller.signal },
+      ),
     ])
-      .then(async ([p, s, c]) => {
+      .then(async ([p, s, settingsResult]) => {
         const first = p.items[0];
         const detail = first
           ? await api<{ production: VersionedProduction }>(
@@ -135,8 +255,12 @@ export function useStudio() {
         if (controller.signal.aborted) return;
         setProductions(p.items);
         setNextCursor(p.nextCursor);
-        setSources(s.sources);
-        setChanges(c.changes);
+        setSources(s.items);
+        setSourceCursor(s.nextCursor);
+        setSettings({
+          settings: settingsResult.settings,
+          revision: settingsResult.revision,
+        });
         setSelectedId(first?.id ?? "");
         setSelected(detail?.production);
         setDraft(detail?.production.data ?? null);
@@ -154,8 +278,14 @@ export function useStudio() {
     return () => controller.abort();
   }, [workspaceId]);
   async function run<T>(fn: () => Promise<T>) {
-    if (operation.current) return;
-    operation.current = true;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    // Controls are disabled while busy, which drops keyboard focus to the
+    // page; return it to where the person was once the work is done.
+    const focused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setBusy(true);
     setError("");
     setNotice("");
@@ -164,8 +294,15 @@ export function useStudio() {
     } catch (e) {
       setError(message(e));
     } finally {
-      operation.current = false;
+      inFlight.current = false;
       setBusy(false);
+      requestAnimationFrame(() => {
+        if (
+          focused?.isConnected &&
+          (document.activeElement === document.body || !document.activeElement)
+        )
+          focused.focus();
+      });
     }
   }
   function replace(p: VersionedProduction) {
@@ -192,29 +329,43 @@ export function useStudio() {
       pendingSave.current = { payload, key: crypto.randomUUID() };
     const key = pendingSave.current.key;
     return run(async () => {
-      const r = await api<{ production: VersionedProduction }>(
-        `/workspaces/${workspaceId}/productions/${selectedId}`,
-        {
-          method: "PUT",
-          body: json({ ...JSON.parse(payload), idempotencyKey: key }),
-        },
-      );
-      replace(r.production);
-      pendingSave.current = null;
-      setNotice(locale === "ja" ? "保存しました" : "Saved");
-      return true;
+      setSaving(true);
+      try {
+        const r = await api<{ production: VersionedProduction }>(
+          `/workspaces/${workspaceId}/productions/${selectedId}`,
+          {
+            method: "PUT",
+            body: json({ ...JSON.parse(payload), idempotencyKey: key }),
+          },
+        );
+        replace(r.production);
+        pendingSave.current = null;
+        setNotice(locale === "ja" ? "保存しました" : "Saved");
+        return true;
+      } finally {
+        setSaving(false);
+      }
     });
   }
   async function createWorkspace(name: string, decision?: "save" | "discard") {
-    if (operation.current) return;
+    if (inFlight.current) return;
     if (dirty && decision === "save" && !(await save())) return;
     if (dirty && !decision && !confirmLeave()) return;
+    // Reuse the ID when retrying the same name, so a lost response never
+    // creates a second workspace.
+    if (pendingCreate.current?.name !== name)
+      pendingCreate.current = { name, id: crypto.randomUUID() };
+    const id = pendingCreate.current.id;
     return run(async () => {
       const r = await api<{ workspace: Workspace }>("/workspaces", {
         method: "POST",
-        body: json({ name }),
+        body: json({ name, id }),
       });
-      setWorkspaces((ws) => [...ws, r.workspace]);
+      pendingCreate.current = null;
+      setWorkspaces((ws) => [
+        ...ws.filter((w) => w.id !== r.workspace.id),
+        r.workspace,
+      ]);
       activateWorkspace(r.workspace.id);
       setView("context");
       return true;
@@ -282,6 +433,8 @@ export function useStudio() {
     setSelectedId("");
     setNextCursor(null);
     setSources([]);
+    setSourceCursor(null);
+    setSettings(null);
     setChanges([]);
     setDraft(null);
     setError("");
@@ -295,7 +448,7 @@ export function useStudio() {
     } catch {}
   }
   async function switchWorkspace(id: string, decision?: "save" | "discard") {
-    if (operation.current || !workspaces.some((w) => w.id === id)) return;
+    if (inFlight.current || !workspaces.some((w) => w.id === id)) return;
     if (id === workspaceId) return true;
     if (dirty && decision === "save" && !(await save())) return;
     if (dirty && !decision && !confirmLeave()) return;
@@ -314,74 +467,256 @@ export function useStudio() {
         `/workspaces/${workspaceId}/sources`,
         { method: "POST", body: json(input) },
       );
-      setSources((s) => [{ ...r.source, body: input.body }, ...s]);
-      setNotice(locale === "ja" ? "情報を保存しました" : "Source saved");
+      setSources((s) => [
+        { ...r.source, body: input.body, nextOffset: null },
+        ...s,
+      ]);
+      setNotice(locale === "ja" ? "資料を保存しました" : "Source saved");
       return r.source;
     });
   }
+  /** Loads the next page of a source's text (the first call loads page one). */
   async function loadSource(id: string) {
     const target = sources.find((x) => x.id === id);
-    if (!target || target.body !== undefined || !target.truncated) return;
+    if (!target || !target.truncated || target.nextOffset === null) return;
+    if (target.body !== undefined && target.nextOffset === undefined) return;
     try {
-      const r = await api<{ text: string }>(
-        `/workspaces/${workspaceId}/sources/${id}`,
-      );
+      const ws = workspaceId;
+      const r = await operation("context_get", {
+        workspaceId: ws,
+        sourceId: id,
+        offset: target.body === undefined ? 0 : (target.nextOffset ?? 0),
+      });
+      if (workspaceRef.current !== ws) return;
       setSources((s) =>
-        s.map((x) => (x.id === id ? { ...x, body: r.text } : x)),
+        s.map((x) =>
+          x.id === id
+            ? {
+                ...x,
+                body: (r.offset ? (x.body ?? "") : "") + r.text,
+                nextOffset: r.nextOffset,
+              }
+            : x,
+        ),
       );
     } catch (e) {
       setError(message(e));
     }
   }
+  async function loadMoreSources() {
+    if (!sourceCursor || busy) return;
+    return run(async () => {
+      const r = await operation("context_list", {
+        workspaceId,
+        limit: SOURCE_PAGE,
+        cursor: sourceCursor,
+      });
+      setSources((s) => [
+        ...s,
+        ...r.items.filter((x) => !s.some((old) => old.id === x.id)),
+      ]);
+      setSourceCursor(r.nextCursor);
+    });
+  }
+  async function setSourceAiExcluded(id: string, aiExcluded: boolean) {
+    const mark = (value: boolean) =>
+      setSources((s) =>
+        s.map((x) => (x.id === id ? { ...x, aiExcluded: value } : x)),
+      );
+    // Optimistic: the switch moves at once and rolls back if the save fails.
+    mark(aiExcluded);
+    const ok = await run(async () => {
+      await operation("context_update", {
+        workspaceId,
+        sourceId: id,
+        aiExcluded,
+      });
+      setNotice(
+        locale === "ja"
+          ? aiExcluded
+            ? "この資料をAIに送らない設定にしました"
+            : "この資料をAIの参照に含めます"
+          : aiExcluded
+            ? "This source is now excluded from AI requests"
+            : "This source is now included in AI requests",
+      );
+      return true;
+    });
+    if (!ok) mark(!aiExcluded);
+    return ok;
+  }
+  async function deleteSource(id: string) {
+    return run(async () => {
+      await operation("context_delete", { workspaceId, sourceId: id });
+      setSources((s) => s.filter((x) => x.id !== id));
+      setNotice(locale === "ja" ? "資料を削除しました" : "Source deleted");
+      return true;
+    });
+  }
+  async function saveSettings(patch: {
+    policy?: Partial<WorkspaceSettings["policy"]>;
+    profile?: Partial<WorkspaceSettings["profile"]>;
+  }) {
+    if (!settings) return;
+    return run(async () => {
+      try {
+        const r = await operation("workspace_settings_update", {
+          workspaceId,
+          baseRevision: settings.revision,
+          patch,
+        });
+        setSettings(r);
+        setNotice(locale === "ja" ? "設定を保存しました" : "Settings saved");
+        return true;
+      } catch (e) {
+        // Keep the latest server copy so the next attempt has a fresh revision.
+        if (e instanceof ApiError && e.code === "CONFLICT") {
+          const ws = workspaceId;
+          operation("workspace_settings_get", { workspaceId: ws })
+            .then((latest) => {
+              if (workspaceRef.current === ws)
+                setSettings({
+                  settings: latest.settings,
+                  revision: latest.revision,
+                });
+            })
+            .catch(() => {});
+        }
+        throw e;
+      }
+    });
+  }
+  async function deleteProduction() {
+    if (!selected) return;
+    const id = selected.id;
+    return run(async () => {
+      await operation("production_delete", { workspaceId, productionId: id });
+      const rest = productions.filter((p) => p.id !== id);
+      setProductions(rest);
+      setChanges((cs) => cs.filter((c) => c.productionId !== id));
+      pendingSave.current = null;
+      const next = rest[0];
+      const detail = next
+        ? await api<{ production: VersionedProduction }>(
+            `/workspaces/${workspaceId}/productions/${next.id}`,
+          ).catch(() => null)
+        : null;
+      setSelected(detail?.production);
+      setSelectedId(detail?.production.id ?? "");
+      setDraft(detail?.production.data ?? null);
+      setNotice(locale === "ja" ? "企画を削除しました" : "Idea deleted");
+      return true;
+    });
+  }
+  async function deleteWorkspace() {
+    if (!workspace || workspace.role !== "owner") return;
+    const id = workspace.id;
+    return run(async () => {
+      await operation("workspace_delete", { workspaceId: id });
+      const rest = workspaces.filter((w) => w.id !== id);
+      setWorkspaces(rest);
+      activateWorkspace(rest[0]?.id ?? "");
+      if (!rest.length) setLoadedWorkspaceId("");
+      setView("home");
+      setNotice(
+        locale === "ja"
+          ? "ワークスペースを削除しました。データは30日後に完全に消去されます。"
+          : "Workspace deleted. Its data is permanently erased after 30 days.",
+      );
+      return true;
+    });
+  }
+  async function rejectChange(id: string) {
+    return run(async () => {
+      await operation("change_reject", { workspaceId, changeId: id });
+      setChanges((cs) => cs.filter((c) => c.id !== id));
+      setNotice(locale === "ja" ? "変更案を却下しました" : "Proposal rejected");
+      return true;
+    });
+  }
+  /** Re-reads open proposals, e.g. after one was decided elsewhere. */
+  /** Re-reads the selected idea's open proposals; false when it failed. */
+  async function refreshChanges() {
+    const ws = workspaceId,
+      productionId = selectedId;
+    if (!ws || !productionId) return true;
+    try {
+      const r = await operation("change_list", {
+        workspaceId: ws,
+        productionId,
+        status: "proposed",
+        includeText: true,
+        limit: 50,
+      });
+      if (workspaceRef.current === ws) setChanges(r.items as Change[]);
+      return true;
+    } catch (e) {
+      if (workspaceRef.current === ws) setError(message(e));
+      return false;
+    }
+  }
   async function generate(itemId: string, instruction: string) {
     if (!selected || dirty) return;
     return run(async () => {
-      const r = await api<{ change: Change }>(
-        `/workspaces/${workspaceId}/generate`,
-        {
-          method: "POST",
-          body: json({
-            productionId: selectedId,
-            itemId,
-            instruction,
-            baseRevision: selected.revision,
-            idempotencyKey: crypto.randomUUID(),
-          }),
-        },
-      );
-      setChanges((cs) => [r.change, ...cs]);
-      setTab("review");
+      try {
+        const r = await api<{ change: Change }>(
+          `/workspaces/${workspaceId}/generate`,
+          {
+            method: "POST",
+            body: json({
+              productionId: selectedId,
+              itemId,
+              instruction,
+              baseRevision: selected.revision,
+              idempotencyKey: crypto.randomUUID(),
+            }),
+          },
+          // Longer than the server's 60 s limit, so the server always answers first.
+          75_000,
+        );
+        setChanges((cs) => [
+          r.change,
+          ...cs.filter((c) => c.id !== r.change.id),
+        ]);
+        setTab("review");
+      } catch (e) {
+        // The proposal may have been stored even though the answer was lost;
+        // show it rather than inviting a second, paid attempt.
+        void refreshChanges();
+        throw e;
+      }
     });
   }
   async function apply(id: string) {
     if (dirty) return;
     return run(async () => {
-      const r = await api<{ production: VersionedProduction }>(
-        `/workspaces/${workspaceId}/apply`,
-        { method: "POST", body: json({ changeId: id }) },
-      );
-      replace(r.production);
-      setChanges((cs) => cs.filter((c) => c.id !== id));
-      setNotice(locale === "ja" ? "変更を適用しました" : "Change applied");
+      try {
+        const r = await api<{ production: VersionedProduction }>(
+          `/workspaces/${workspaceId}/apply`,
+          { method: "POST", body: json({ changeId: id }) },
+        );
+        replace(r.production);
+        setChanges((cs) => cs.filter((c) => c.id !== id));
+        setNotice(locale === "ja" ? "変更を適用しました" : "Change applied");
+      } catch (e) {
+        // The proposal may have been decided or gone stale meanwhile.
+        void refreshChanges();
+        throw e;
+      }
     });
   }
   async function restore(revision: number) {
     if (!selected || dirty || busy) return;
     return run(async () => {
-      const r = await api<{ data: VersionedProduction }>("/operations", {
-        method: "POST",
-        body: json({
-          name: "production_restore",
-          arguments: {
-            workspaceId,
-            productionId: selected.id,
-            revision,
-            baseRevision: selected.revision,
-            idempotencyKey: crypto.randomUUID(),
-          },
+      replace(
+        await operation("production_restore", {
+          workspaceId,
+          productionId: selected.id,
+          revision,
+          baseRevision: selected.revision,
+          idempotencyKey: crypto.randomUUID(),
         }),
-      });
-      replace(r.data);
+      );
       setNotice(
         locale === "ja"
           ? "新しい版として復元しました"
@@ -393,12 +728,16 @@ export function useStudio() {
     if (!confirmLeave()) return;
     if (!workspaceId) return init();
     return run(async () => {
-      const [sourceResult, changeResult] = await Promise.all([
-        api<{ sources: LoadedSource[] }>(`/workspaces/${workspaceId}/sources`),
-        api<{ changes: Change[] }>(`/workspaces/${workspaceId}/changes`),
+      const [sourceResult, settingsResult] = await Promise.all([
+        operation("context_list", { workspaceId, limit: SOURCE_PAGE }),
+        operation("workspace_settings_get", { workspaceId }),
       ]);
-      setSources(sourceResult.sources);
-      setChanges(changeResult.changes);
+      setSources(sourceResult.items);
+      setSourceCursor(sourceResult.nextCursor);
+      setSettings({
+        settings: settingsResult.settings,
+        revision: settingsResult.revision,
+      });
       const r = await api<{
         items: ProductionSummary[];
         nextCursor: string | null;
@@ -416,8 +755,52 @@ export function useStudio() {
       setSelected(detail?.production);
       setSelectedId(id ?? "");
       setDraft(detail?.production.data ?? null);
+      const open = id
+        ? await operation("change_list", {
+            workspaceId,
+            productionId: id,
+            status: "proposed",
+            includeText: true,
+            limit: 50,
+          })
+        : null;
+      setChanges((open?.items ?? []) as Change[]);
       setWorkspaceFailed(false);
     });
+  }
+  /** Puts the locally backed-up edits back into the editor (still unsaved). */
+  function restoreBackup() {
+    if (!recovery || recovery.productionId !== selected?.id) return;
+    setDraft(recovery.data);
+    setRecovery(null);
+    setNotice(
+      locale === "ja"
+        ? "未保存だった編集を復元しました。内容を確認して保存してください。"
+        : "Unsaved edits restored. Review them, then save.",
+    );
+  }
+  function discardBackup() {
+    if (!recovery) return;
+    try {
+      sessionStorage.removeItem(backupKey(workspaceId, recovery.productionId));
+    } catch {}
+    setRecovery(null);
+  }
+  /** Changes view; asks first when leaving unsaved settings. */
+  function navigate(next: View) {
+    if (
+      view === "settings" &&
+      next !== "settings" &&
+      settingsDirty &&
+      !window.confirm(
+        locale === "ja"
+          ? "保存していない設定の変更があります。破棄して移動しますか？"
+          : "Discard unsaved settings changes?",
+      )
+    )
+      return;
+    if (view === "settings" && next !== "settings") setDirtySettings([]);
+    setView(next);
   }
   return {
     workspaces,
@@ -445,11 +828,27 @@ export function useStudio() {
       setSourceDrafts((ds) => ({
         ...ds,
         [workspaceId]: {
-          ...(ds[workspaceId] ?? {name:"",kind:"markdown" as const,reference:"",body:""}),
+          ...(ds[workspaceId] ?? {
+            name: "",
+            kind: "markdown" as const,
+            reference: "",
+            body: "",
+          }),
           ...fields,
         },
       })),
     loadSource,
+    sourceCursor,
+    loadMoreSources,
+    setSourceAiExcluded,
+    deleteSource,
+    settings,
+    saveSettings,
+    aiProviders,
+    deleteProduction,
+    deleteWorkspace,
+    rejectChange,
+    refreshChanges,
     changes,
     selected,
     draft,
@@ -463,12 +862,17 @@ export function useStudio() {
       } catch {}
     },
     view,
-    setView,
+    setView: navigate,
+    markSettingsDirty,
+    recovery,
+    restoreBackup,
+    discardBackup,
     tab,
     setTab,
     loading:
       loading || Boolean(workspaceId && loadedWorkspaceId !== workspaceId),
     busy,
+    saving,
     error,
     notice,
     caps,
@@ -486,24 +890,16 @@ export function useStudio() {
     reload,
     restore,
     setError,
+    setNotice,
   };
 }
-function message(e: unknown) {
-  if (e instanceof ApiError) {
-    const messages: Record<string, string> = {
-      CONFLICT:
-        "別の更新が保存されています。編集内容を退避してから再読み込みしてください。 / Revision conflict.",
-      LOCKED:
-        "この項目はロックされています。解除して保存してから編集してください。",
-      UNAUTHENTICATED: "再ログインしてください。 / Sign in again.",
-      AI_NOT_CONFIGURED:
-        "AI生成はサーバー設定待ちです。手動編集と保存は利用できます。",
-      VALIDATION: "入力の長さ・URL・日付を確認してください。",
-      PROVIDER_ERROR:
-        "AI生成を完了できませんでした。元の内容は保持されています。",
-    };
-    return messages[e.code] ?? e.message;
-  }
-  return e instanceof Error ? e.message : "操作を完了できませんでした。";
-}
+const SOURCE_PAGE = 50;
+type DraftBackup = {
+  productionId: string;
+  revision: number;
+  data: Production;
+  at: number;
+};
+const backupKey = (workspaceId: string, productionId: string) =>
+  `concentrate.draft:${workspaceId}:${productionId}`;
 export type StudioController = ReturnType<typeof useStudio>;

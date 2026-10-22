@@ -391,6 +391,15 @@ test("item_patch edits one item against its hash, independent of other edits", a
   const data = structuredClone(p.data);
   data.title = "Renamed meanwhile";
   await owner.save("wa", "patch", data, 1, "patch-other");
+  // Under the default policy agents only propose; direct edits are refused.
+  await assert.rejects(
+    bot.patchItem("wa", "patch", "second", hash, { body: "x" }, "patch-0"),
+    { code: "AGENT_PROPOSE_ONLY" },
+  );
+  const before = await owner.settings("wa");
+  await owner.updateSettings("wa", before.revision, {
+    policy: { agentApply: "own_proposals" },
+  });
   const patched = await bot.patchItem(
     "wa",
     "patch",
@@ -436,6 +445,18 @@ test("item_patch edits one item against its hash, independent of other edits", a
   );
   assert.equal(brief.revision, 4);
   assert.equal((await repo.get("wa", "patch"))?.data.persona, "Founders");
+  // Even when trusted to write, an agent cannot change a person's lock.
+  const current = (await repo.get("wa", "patch"))!;
+  const locked = structuredClone(current.data);
+  locked.items[1].locked = true;
+  await assert.rejects(
+    bot.save("wa", "patch", locked, current.revision, "agent-lock"),
+    { code: "FORBIDDEN" },
+  );
+  const after = await owner.settings("wa");
+  await owner.updateSettings("wa", after.revision, {
+    policy: { agentApply: "never" },
+  });
 });
 
 test("agents propose with their own model; people decide unless the policy allows agents", async () => {
@@ -533,6 +554,16 @@ test("source listing carries previews only; text is read in ranges and searched"
     body: "token sk-proj-abcdefghijklmnopqrstuvwxyz012345",
   });
   assert.deepEqual(secret.sensitive, ["api_key"]);
+  // Excluding a source keeps it out of AI and agent search, not the owner's.
+  await owner.updateSource("src", added.id, true);
+  assert.equal(
+    (await owner.searchSources("src", "XYZZY", 5)).results[0].sourceId,
+    added.id,
+  );
+  const bot = new StudioService(repo, agent("alice"));
+  assert.equal((await bot.searchSources("src", "XYZZY", 5)).results.length, 0);
+  await owner.updateSource("src", added.id, false);
+  assert.equal((await bot.searchSources("src", "XYZZY", 5)).results.length, 1);
   await owner.deleteSource("src", added.id);
   assert.equal(
     (await owner.searchSources("src", "XYZZY", 5)).results.length,

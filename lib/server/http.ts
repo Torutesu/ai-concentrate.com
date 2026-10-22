@@ -25,21 +25,32 @@ export const requestIdOf = (r: Request) =>
   r.headers.get("x-request-id")?.match(/^[\w-]{8,64}$/)?.[0] ??
   crypto.randomUUID();
 
+/**
+ * CSRF defence for cookie sessions: a browser always sends Origin or
+ * Sec-Fetch-Site on cross-site requests, so either one naming another site is
+ * refused. Bearer-token clients (agents, CLI) send neither and are unaffected.
+ */
+export function assertSameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  const site = request.headers.get("sec-fetch-site");
+  const crossOrigin = origin
+    ? origin !== new URL(request.url).origin
+    : site !== null && site !== "same-origin" && site !== "none";
+  if (crossOrigin)
+    throw new DomainError(
+      "ORIGIN",
+      403,
+      "Cross-origin writes are not allowed.",
+    );
+}
+
 /** Resolves the verified caller. Throws 401 without a valid session or token. */
 export async function operationContext(
   request: Request,
   requestId: string,
   write: boolean,
 ): Promise<OperationContext> {
-  if (write) {
-    const origin = request.headers.get("origin");
-    if (origin && origin !== new URL(request.url).origin)
-      throw new DomainError(
-        "ORIGIN",
-        403,
-        "Cross-origin writes are not allowed.",
-      );
-  }
+  if (write) assertSameOrigin(request);
   const identity = await getIdentity(request);
   if (!identity)
     throw new DomainError("UNAUTHENTICATED", 401, "Sign in to continue.");
@@ -57,7 +68,14 @@ export async function operationContext(
 }
 
 export async function body<T>(r: Request, schema: ZodType<T>): Promise<T> {
-  if (!r.headers.get("content-type")?.includes("application/json"))
+  // Exact media type: "text/plain; x=application/json" is a CORS-safelisted
+  // type a cross-site form could send without a preflight.
+  const type = r.headers
+    .get("content-type")
+    ?.split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (type !== "application/json")
     throw new DomainError("CONTENT_TYPE", 415, "Use application/json.");
   const reader = r.body?.getReader();
   if (!reader) throw new DomainError("INVALID_JSON", 400, "Empty request.");
@@ -88,6 +106,27 @@ export async function body<T>(r: Request, schema: ZodType<T>): Promise<T> {
   return schema.parse(parsed);
 }
 
+/**
+ * Releases a request body that an early rejection (origin, auth, media type)
+ * never read. An unread body can break the connection for the next request
+ * (wrangler dev answers it with "worker restarted mid-request").
+ */
+export async function discardBody(request: Request) {
+  if (!request.body || request.bodyUsed) return;
+  // Drain rather than cancel: a cancelled upload still broke the next request.
+  // Bounded by the request limit; anything larger is cut off.
+  const reader = request.body.getReader();
+  let read = 0;
+  try {
+    while (read <= LIMITS.requestBytes) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      read += value.byteLength;
+    }
+    await reader.cancel();
+  } catch {}
+}
+
 /** Safe error body: domain errors and field issues; internal details are only logged. */
 export function errorResponse(
   e: unknown,
@@ -99,6 +138,7 @@ export function errorResponse(
     "X-Request-Id": requestId,
   };
   if (e instanceof DomainError) {
+    if (e.retryAfter) headers["Retry-After"] = String(e.retryAfter);
     if (e.status === 401 && request) {
       const origin = new URL(request.url).origin;
       // Lets MCP clients discover where to obtain an access token (RFC 9728).
@@ -157,6 +197,7 @@ export async function run(
       headers: { "Cache-Control": "no-store", "X-Request-Id": requestId },
     });
   } catch (e) {
+    await discardBody(request);
     return errorResponse(e, requestId, request);
   }
 }

@@ -92,17 +92,32 @@ lists read denormalized summary columns and keyset cursors.
 People in the app hold every scope their role allows. OAuth tokens (MCP/CLI)
 get `studio:read/write/propose/ai`; they cannot delete, administer or apply
 proposals unless the owner sets `agentApply` to `own_proposals` or `any`.
+Under the default `never`, agents also cannot edit content directly
+(`item_patch`, `brief_patch`, `production_save`, restore) or reject; they submit
+`change_propose`. Agents never change item locks, and they see only the sources
+AI may see (no AI-excluded sources, none at all when `sendSources` is `none`).
 Every mutation and every denial is written to `audit_events` (identifiers
 only). On Vercel, `/mcp` accepts Clerk OAuth access tokens and publishes
 RFC 9728 metadata once `MCP_OAUTH_ENABLED=true`; on Sites the gateway handles
 OAuth.
 
+## Access, limits and health
+
+- **Access.** On Vercel, `lib/server/access.ts` admits only `ACCESS_ALLOWLIST` (user IDs, emails, `@domain`) and fails closed in Production unless `ACCESS_MODE=open`. The Sites gateway is already owner-private.
+- **Rate limits.** Every mutating operation passes a per-user fixed-window counter (`rate_limits`, one atomic upsert), so the same limits apply to the Web, REST, MCP and the CLI.
+- **Quotas.** Workspaces, ideas and open proposals are capped with conditional inserts, in `lib/domain/limits.ts`.
+- **Health.** `/api/health` names every table and column in `db/schema.ts` in one query, so a deploy that ran ahead of its migration reports 503 instead of failing user requests.
+- **Headers.** Security headers come from `lib/server/security-headers.ts`, on both runtimes.
+
 ## Retention and deletion
 
 Sources and productions are deleted immediately. Deleted workspaces are hidden
 at once and purged after 30 days. The daily cron (`/api/cron/retention`)
-removes receipts after 7 days, admission records after 30, decided proposals
-after 90 and ledgers after 400. Clerk `user.deleted` removes memberships,
+removes receipts after 7 days, admission records after 30, proposals after 90
+(open or decided), ledgers after 400, rate-limit windows after a day and all
+but the last 100 saved versions per idea. It works in bounded batches under a
+time budget and resumes the next day; the Sites Worker runs it from its own
+`scheduled` handler. Clerk `user.deleted` removes memberships,
 starts deletion of solely owned workspaces and pseudonymizes the user's ID.
 
 ## Not built yet
@@ -112,7 +127,7 @@ limit), item-level storage with content-addressed revisions (snapshots are
 whole aggregates, bounded by the 256 KB budget), MCP `outputSchema`, a local
 agent-connection list with revocation, a Google adapter, additional AI tasks
 (channel derivation, brief extraction, claim checking on the server), UI for
-settings/deletion/usage, URL crawling, repository sync, publishing, analytics,
+URL crawling, repository sync, publishing, analytics,
 rendering and billing. Do not present these as working.
 
 ## Verification and local operation

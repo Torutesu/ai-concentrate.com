@@ -2,6 +2,7 @@ import { cronSecret, database } from "@/lib/platform/runtime";
 import { Repository } from "../../../../lib/server/repository";
 import { errorResponse, requestIdOf } from "../../../../lib/server/http";
 import { DomainError } from "../../../../lib/domain/models";
+import { bearerMatches } from "../../../../lib/server/webhooks";
 
 /**
  * Daily retention purge (see RETENTION in lib/domain/limits.ts). Vercel Cron
@@ -11,7 +12,7 @@ export async function GET(r: Request) {
   const requestId = requestIdOf(r);
   try {
     const secret = cronSecret();
-    if (!secret || r.headers.get("authorization") !== `Bearer ${secret}`)
+    if (!bearerMatches(r.headers.get("authorization"), secret))
       throw new DomainError("UNAUTHENTICATED", 401, "Not allowed.");
     const purged = await new Repository(database()).purge();
     console.log(

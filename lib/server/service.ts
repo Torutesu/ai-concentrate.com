@@ -182,17 +182,29 @@ export class StudioService {
     key: string,
   ) {
     requireEdit(await this.repository.role(workspaceId, this.actorId));
+    await this.assertDirectWrite(workspaceId);
     data = productionSchema.parse(data);
     const fingerprint = await digest(
       JSON.stringify({ id, data, baseRevision }),
     );
     const replay = await this.repository.receipt(workspaceId, key, fingerprint);
     if (replay) return replay;
-    validateSave(
-      await this.repository.get(workspaceId, id),
-      data,
-      baseRevision,
-    );
+    const existing = await this.repository.get(workspaceId, id);
+    validateSave(existing, data, baseRevision);
+    if (this.actor.channel !== "web" && existing) {
+      // Locks are a person's decision; an agent may neither set nor clear one.
+      const locked = new Map(existing.data.items.map((i) => [i.id, i.locked]));
+      if (
+        data.items.some(
+          (i) => locked.has(i.id) && locked.get(i.id) !== i.locked,
+        )
+      )
+        throw new DomainError(
+          "FORBIDDEN",
+          403,
+          "Agents cannot lock or unlock items.",
+        );
+    }
     return this.commit(workspaceId, id, data, baseRevision, key, fingerprint);
   }
   /** Edits one item against its text hash, so unrelated concurrent edits do not conflict. */
@@ -205,6 +217,7 @@ export class StudioService {
     key: string,
   ) {
     requireEdit(await this.repository.role(workspaceId, this.actorId));
+    await this.assertDirectWrite(workspaceId);
     const fingerprint = await digest(
       JSON.stringify({
         op: "item_patch",
@@ -246,6 +259,7 @@ export class StudioService {
     key: string,
   ) {
     requireEdit(await this.repository.role(workspaceId, this.actorId));
+    await this.assertDirectWrite(workspaceId);
     const fingerprint = await digest(
       JSON.stringify({ op: "brief_patch", productionId, baseRevision, fields }),
     );
@@ -287,11 +301,23 @@ export class StudioService {
     cursor?: string,
   ) {
     await this.repository.role(workspaceId, this.actorId);
+    // Agents are AI: they see only what the workspace lets AI see.
+    if (this.actor.channel !== "web") {
+      const { settings } = await this.repository.settings(workspaceId);
+      if (settings.policy.sendSources === "none")
+        return { items: [], nextCursor: null };
+      return this.repository.sourceSummaries(workspaceId, limit, cursor, false);
+    }
     return this.repository.sourceSummaries(workspaceId, limit, cursor);
   }
   async source(workspaceId: string, id: string, offset: number, limit: number) {
     await this.repository.role(workspaceId, this.actorId);
     const { body, ...meta } = await this.repository.source(workspaceId, id);
+    if (this.actor.channel !== "web") {
+      const { settings } = await this.repository.settings(workspaceId);
+      if (meta.aiExcluded || settings.policy.sendSources === "none")
+        throw sourceWithheld();
+    }
     const end = Math.min(body.length, offset + limit);
     return {
       source: { ...meta, chars: body.length },
@@ -302,14 +328,24 @@ export class StudioService {
   }
   async searchSources(workspaceId: string, query: string, limit: number) {
     await this.repository.role(workspaceId, this.actorId);
+    const person = this.actor.channel === "web";
+    if (!person) {
+      const { settings } = await this.repository.settings(workspaceId);
+      if (settings.policy.sendSources === "none") throw sourceWithheld();
+    }
+    // Exclusion governs what reaches AI: agents never discover excluded
+    // sources through search, while people search their whole library.
     const hits = await this.repository.searchChunks(
       workspaceId,
       ftsPhrase(query),
       limit,
+      person,
     );
+    const needle = query.toLowerCase();
     return {
       results: hits.map((h) => {
-        const at = Math.max(0, h.body.indexOf(query) - 200);
+        // The trigram index is case-insensitive; find the hit the same way.
+        const at = Math.max(0, h.body.toLowerCase().indexOf(needle) - 200);
         return {
           sourceId: h.sourceId,
           chunk: h.ordinal,
@@ -399,6 +435,7 @@ export class StudioService {
       await digest(target?.body ?? ""),
       change.beforeHash ?? (await digest(change.before)),
     );
+    if (!productionSchema.safeParse(data).success) throw itemTooLarge();
     return this.commit(
       workspaceId,
       current.id,
@@ -411,6 +448,7 @@ export class StudioService {
   }
   async reject(workspaceId: string, id: string) {
     requireEdit(await this.repository.role(workspaceId, this.actorId));
+    await this.assertDirectWrite(workspaceId);
     return Repository.summarize(
       await this.repository.rejectChange(workspaceId, id, this.actorId),
     );
@@ -512,16 +550,24 @@ export class StudioService {
       remainingTokens: Math.max(0, monthlyTokenBudget - you.billableTokens),
     };
   }
-  async assertBudget(monthlyTokenBudget: number) {
-    const you = await this.repository.usage(
-      { actorId: this.actorId },
-      monthStart(),
-    );
+  async assertBudget(monthlyTokenBudget: number, globalMonthlyTokenBudget = 0) {
+    const since = monthStart();
+    const you = await this.repository.usage({ actorId: this.actorId }, since);
     if (you.billableTokens >= monthlyTokenBudget)
       throw new DomainError(
         "AI_BUDGET",
         429,
         "Your monthly AI token budget is used up. Edit manually or ask an administrator to raise AI_MONTHLY_TOKEN_BUDGET.",
+      );
+    if (
+      globalMonthlyTokenBudget > 0 &&
+      (await this.repository.totalBillableTokens(since)) >=
+        globalMonthlyTokenBudget
+    )
+      throw new DomainError(
+        "AI_BUDGET",
+        429,
+        "This deployment's monthly AI budget is used up. Edit manually or ask an administrator to raise AI_GLOBAL_MONTHLY_TOKEN_BUDGET.",
       );
   }
 
@@ -578,6 +624,20 @@ export class StudioService {
     return item;
   }
   /** People always may apply; agents only as the workspace policy allows. */
+  /**
+   * Agents change content directly only where the workspace lets them apply
+   * proposals; otherwise their work must arrive as a proposal for a person.
+   */
+  private async assertDirectWrite(workspaceId: string) {
+    if (this.actor.channel === "web") return;
+    const { settings } = await this.repository.settings(workspaceId);
+    if (settings.policy.agentApply === "never")
+      throw new DomainError(
+        "AGENT_PROPOSE_ONLY",
+        403,
+        "This workspace accepts changes from agents only as proposals. Use change_propose; a person reviews and applies it.",
+      );
+  }
   private async authorizeApply(workspaceId: string, change: Change) {
     if (this.hasScope("studio:apply")) return;
     const { settings } = await this.repository.settings(workspaceId);
@@ -637,3 +697,15 @@ async function compact(p: VersionedProduction, itemId?: string) {
       : {}),
   };
 }
+export const itemTooLarge = () =>
+  new DomainError(
+    "ITEM_TOO_LARGE",
+    422,
+    `The resulting text exceeds the ${LIMITS.itemBodyBytes}-byte item limit. Shorten it or split it into another item.`,
+  );
+const sourceWithheld = () =>
+  new DomainError(
+    "AI_POLICY",
+    403,
+    "This source is excluded from AI use by the workspace policy.",
+  );

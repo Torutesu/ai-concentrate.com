@@ -1,6 +1,10 @@
 import { clerkWebhookSecret, database } from "@/lib/platform/runtime";
 import { Repository } from "../../../../lib/server/repository";
-import { errorResponse, requestIdOf } from "../../../../lib/server/http";
+import {
+  discardBody,
+  errorResponse,
+  requestIdOf,
+} from "../../../../lib/server/http";
 import { verifySvix } from "../../../../lib/server/webhooks";
 import { DomainError } from "../../../../lib/domain/models";
 
@@ -13,6 +17,8 @@ export async function POST(r: Request) {
   try {
     const secret = clerkWebhookSecret();
     if (!secret) return new Response(null, { status: 404 });
+    if (Number(r.headers.get("content-length") ?? 0) > 100_000)
+      throw new DomainError("TOO_LARGE", 413, "Payload too large.");
     const payload = await r.text();
     if (
       payload.length > 100_000 ||
@@ -27,6 +33,7 @@ export async function POST(r: Request) {
       await new Repository(database()).removeUser(event.data.id);
     return Response.json({ received: true });
   } catch (e) {
+    await discardBody(r);
     return errorResponse(e, requestId);
   }
 }

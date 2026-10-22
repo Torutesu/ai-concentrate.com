@@ -51,3 +51,5 @@ https://developers.cloudflare.com/d1/get-started/
 ## Superseding decision
 User explicitly chose Vercel and requested implementation. See VERCEL.md for the
 actual independent runtime, provisioning state and remaining release gates.
+
+Current go-live checklist, configuration and limits: VERCEL.md, "Production readiness — 2026-10-12".

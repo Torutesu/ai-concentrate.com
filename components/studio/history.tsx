@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Production } from "../../lib/domain/models";
 import { api, json } from "../../lib/studio-client";
+import { labels } from "./i18n";
 import type { StudioController } from "./use-studio";
-import { Action, Badge, Panel } from "./ui";
+import { Action, Badge, Panel, useModalDialog } from "./ui";
 type Row = { revision: number; createdAt: string };
 type Page = { items: Row[]; nextBefore: number | null };
 export function History({ s }: { s: StudioController }) {
@@ -89,7 +90,13 @@ function HistoryContent({ s }: { s: StudioController }) {
       {page.items.map((r) => (
         <div key={r.revision} className="identity">
           <strong>v{r.revision}</strong>
-          <span>{Number.isNaN(Date.parse(r.createdAt)) ? (en ? "Date unavailable" : "日時を取得できません") : new Date(r.createdAt).toLocaleString(s.locale)}</span>
+          <span>
+            {Number.isNaN(Date.parse(r.createdAt))
+              ? en
+                ? "Date unavailable"
+                : "日時を取得できません"
+              : new Date(r.createdAt).toLocaleString(s.locale)}
+          </span>
           {r.revision === s.selected?.revision && (
             <Badge>{en ? "Current" : "現在の版"}</Badge>
           )}
@@ -125,11 +132,10 @@ function Snapshot({
   close: () => void;
 }) {
   const en = s.locale === "en";
-  const ref = useRef<HTMLDialogElement>(null);
+  const ref = useModalDialog();
   const [data, setData] = useState<Production>();
   const [error, setError] = useState("");
   useEffect(() => {
-    ref.current?.showModal();
     const c = new AbortController();
     api<{ data: { data: Production } }>("/operations", {
       method: "POST",
@@ -209,8 +215,9 @@ function Snapshot({
           {data.items.map((item) => (
             <section key={item.id}>
               <h3>
-                {item.title} · {item.kind} · {item.locale}
-                {item.locked ? " 🔒" : ""}
+                {item.title} · {kindLabel(item.kind, s.locale)} ·{" "}
+                {item.locale === "ja" ? "日本語" : "English"}
+                {item.locked ? (en ? " · Locked" : " · ロック中") : ""}
               </h3>
               <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
                 {item.body || (en ? "Empty" : "未入力")}
@@ -242,4 +249,16 @@ function Snapshot({
       )}
     </dialog>
   );
+}
+function kindLabel(kind: string, locale: "ja" | "en") {
+  const t = labels[locale];
+  const names: Record<string, string> = {
+    draft: t.draft,
+    x: t.x,
+    article: t.article,
+    reddit: t.reddit,
+    scene: t.video,
+    step: t.guide,
+  };
+  return names[kind] ?? kind;
 }

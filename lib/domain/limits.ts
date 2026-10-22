@@ -13,13 +13,26 @@ export const LIMITS = {
   requestBytes: 300_000,
   sourceChars: 60_000,
   sourcesPerWorkspace: 200,
+  /** Owned workspaces, including deleted ones still in their grace period. */
   workspacesPerOwner: 20,
+  productionsPerWorkspace: 300,
+  /** Undecided proposals per workspace; decide or reject to make room. */
+  openChangesPerWorkspace: 300,
   /** Default size of one MCP/API list page. */
   pageSize: 20,
   maxPageSize: 50,
   /** Characters returned by one context_get / item_get call by default. */
   readChars: 8_000,
   previewChars: 600,
+} as const;
+
+/**
+ * Per-user fixed-window rate limits applied to every transport. Reads are not
+ * limited; AI operations also pass workspace admission and the token budget.
+ */
+export const RATE_LIMITS = {
+  writes: { limit: 120, windowSeconds: 60 },
+  ai: { limit: 20, windowSeconds: 600 },
 } as const;
 
 /** Retention windows in days. Workspaces are purged after the grace period. */
@@ -29,4 +42,6 @@ export const RETENTION = {
   decidedChangeDays: 90,
   workspaceGraceDays: 30,
   ledgerDays: 400,
+  /** Saved versions kept per production (older ones are purged daily). */
+  revisionsPerProduction: 100,
 } as const;
