@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   body,
+  discardBody,
   errorResponse,
   operationContext,
   requestIdOf,
@@ -24,6 +25,7 @@ export async function POST(r: Request) {
       headers: { "Cache-Control": "no-store", "X-Request-Id": requestId },
     });
   } catch (e) {
+    await discardBody(r);
     return errorResponse(e, requestId, r);
   }
 }

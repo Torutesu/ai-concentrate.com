@@ -1,6 +1,10 @@
 import { clerkWebhookSecret, database } from "@/lib/platform/runtime";
 import { Repository } from "../../../../lib/server/repository";
-import { errorResponse, requestIdOf } from "../../../../lib/server/http";
+import {
+  discardBody,
+  errorResponse,
+  requestIdOf,
+} from "../../../../lib/server/http";
 import { verifySvix } from "../../../../lib/server/webhooks";
 import { DomainError } from "../../../../lib/domain/models";
 
@@ -29,6 +33,7 @@ export async function POST(r: Request) {
       await new Repository(database()).removeUser(event.data.id);
     return Response.json({ received: true });
   } catch (e) {
+    await discardBody(r);
     return errorResponse(e, requestId);
   }
 }

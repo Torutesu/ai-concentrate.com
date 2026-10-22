@@ -106,6 +106,27 @@ export async function body<T>(r: Request, schema: ZodType<T>): Promise<T> {
   return schema.parse(parsed);
 }
 
+/**
+ * Releases a request body that an early rejection (origin, auth, media type)
+ * never read. An unread body can break the connection for the next request
+ * (wrangler dev answers it with "worker restarted mid-request").
+ */
+export async function discardBody(request: Request) {
+  if (!request.body || request.bodyUsed) return;
+  // Drain rather than cancel: a cancelled upload still broke the next request.
+  // Bounded by the request limit; anything larger is cut off.
+  const reader = request.body.getReader();
+  let read = 0;
+  try {
+    while (read <= LIMITS.requestBytes) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      read += value.byteLength;
+    }
+    await reader.cancel();
+  } catch {}
+}
+
 /** Safe error body: domain errors and field issues; internal details are only logged. */
 export function errorResponse(
   e: unknown,
@@ -176,6 +197,7 @@ export async function run(
       headers: { "Cache-Control": "no-store", "X-Request-Id": requestId },
     });
   } catch (e) {
+    await discardBody(request);
     return errorResponse(e, requestId, request);
   }
 }

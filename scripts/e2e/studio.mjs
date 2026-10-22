@@ -40,10 +40,17 @@ async function newPage(
   user,
   { locale = "ja", viewport = { width: 1440, height: 1000 } } = {},
 ) {
-  const context = await browser.newContext({
-    extraHTTPHeaders: headers(user),
-    viewport,
-  });
+  const context = await browser.newContext({ viewport });
+  // Identity goes only to the app's own origin: as extra headers on every
+  // request it also reached third-party font hosts and failed their CORS.
+  const origin = new URL(BASE).origin;
+  await context.route(
+    (url) => url.origin === origin,
+    (route) =>
+      route.continue({
+        headers: { ...route.request().headers(), ...headers(user) },
+      }),
+  );
   await context.addInitScript((l) => {
     try {
       localStorage.setItem("concentrate.locale", l);
@@ -552,15 +559,17 @@ try {
   );
 
   await step("health check and security headers", async () => {
+    const identity = headers("qa_owner");
     const health = await owner.request.get(BASE + "/api/health");
     assert.equal(health.status(), 200);
     assert.deepEqual(await health.json(), { status: "ok" });
-    const page = await owner.request.get(BASE + "/");
+    const page = await owner.request.get(BASE + "/", { headers: identity });
     assert.equal(page.headers()["x-content-type-options"], "nosniff");
     assert.ok(page.headers()["referrer-policy"]);
     // Cross-site writes are refused even with a valid session.
     const forged = await owner.request.post(BASE + "/api/v1/operations", {
       headers: {
+        ...identity,
         "content-type": "application/json",
         origin: "https://evil.example",
       },
@@ -568,10 +577,24 @@ try {
     });
     assert.equal(forged.status(), 403);
     const plain = await owner.request.post(BASE + "/api/v1/operations", {
-      headers: { "content-type": "text/plain; charset=application/json" },
+      headers: {
+        ...identity,
+        "content-type": "text/plain; charset=application/json",
+      },
       data: JSON.stringify({ name: "workspace_list", arguments: {} }),
     });
     assert.equal(plain.status(), 415);
+    // A rejected request's unread body must not break the next request.
+    const big = await owner.request.post(BASE + "/api/v1/operations", {
+      headers: { ...identity, "content-type": "text/plain" },
+      data: "x".repeat(200_000),
+    });
+    assert.equal(big.status(), 415);
+    const after = await owner.request.post(BASE + "/api/v1/operations", {
+      headers: { ...identity, "content-type": "application/json" },
+      data: { name: "workspace_list", arguments: {} },
+    });
+    assert.equal(after.status(), 200);
   });
 
   await step("delete workspace requires typing its name", async () => {
