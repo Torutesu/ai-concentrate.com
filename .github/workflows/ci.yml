@@ -30,6 +30,10 @@ jobs:
       # Browser scenario on the built Sites Worker with a fresh local D1.
       - run: npx playwright install --with-deps chromium
       - run: scripts/e2e/run.sh --no-build
+      # Same scenario with every API call delayed, to catch timing races early.
+      - run: scripts/e2e/run.sh --no-build
+        env:
+          E2E_API_DELAY_MS: "400"
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

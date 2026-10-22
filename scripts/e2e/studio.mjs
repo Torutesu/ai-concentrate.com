@@ -44,12 +44,18 @@ async function newPage(
   // Identity goes only to the app's own origin: as extra headers on every
   // request it also reached third-party font hosts and failed their CORS.
   const origin = new URL(BASE).origin;
+  // E2E_API_DELAY_MS slows every API call, to flush out timing races that
+  // only show up on slower CI machines.
+  const delay = Number(process.env.E2E_API_DELAY_MS ?? 0);
   await context.route(
     (url) => url.origin === origin,
-    (route) =>
-      route.continue({
+    async (route) => {
+      if (delay && new URL(route.request().url()).pathname.startsWith("/api/"))
+        await new Promise((r) => setTimeout(r, delay));
+      await route.continue({
         headers: { ...route.request().headers(), ...headers(user) },
-      }),
+      });
+    },
   );
   await context.addInitScript((l) => {
     try {
@@ -333,19 +339,24 @@ try {
   await step("create an idea and save a draft through the editor", async () => {
     await nav(owner, "コンテンツ");
     await owner.getByRole("button", { name: "新しい企画" }).first().click();
+    // Creation ends by opening the plan tab; switch tabs only after it is done,
+    // or the draft tab click is overridden on a slow machine.
+    await owner.locator(".editor-toolbar").waitFor();
+    await owner.getByText("企画のブリーフ").waitFor();
     await owner
       .getByRole("navigation", { name: "制作形式" })
       .getByRole("button", { name: "原稿", exact: true })
       .click();
+    const body = owner.getByLabel("本文", { exact: true });
     const add = owner
       .locator(".writing-panel")
       .getByRole("button", { name: "作成する" });
-    if (await add.count()) await add.click();
-    await owner
-      .getByLabel("本文", { exact: true })
-      .fill(
-        "月曜の朝、前回の判断から再開できます。チームは迷わず次の作業に進めます。",
-      );
+    // Wait for the draft tab to render: either the item or its create button.
+    await body.or(add).first().waitFor();
+    if (await add.isVisible()) await add.click();
+    await body.fill(
+      "月曜の朝、前回の判断から再開できます。チームは迷わず次の作業に進めます。",
+    );
     await owner
       .locator(".editor-toolbar")
       .getByRole("button", { name: "保存する" })

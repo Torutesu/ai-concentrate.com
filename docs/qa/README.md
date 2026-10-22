@@ -10,6 +10,7 @@ Run these before merging any change that touches UI or the request path.
 | Vercel build | `npm run build:vercel` | Next.js target compiles |
 | Sites build | `npm run build && npm run check:sites` | Sites Worker bundles `lib/platform/sites.ts`, not the Clerk/Turso runtime |
 | Browser E2E | `npm run e2e` (CI: `scripts/e2e/run.sh --no-build`) | The scenario below on a fresh local D1, with Playwright pinned to 1.56.1 |
+| Slow-network E2E | `E2E_API_DELAY_MS=400 npm run e2e` (also in CI) | The same scenario with every API call delayed; catches UI timing races |
 | Prompt eval | `npm run eval -- --models provider:model` (`--dry-run` checks the harness only) | Required for any prompt or model change |
 
 ## Browser scenario (`scripts/e2e/studio.mjs`)
